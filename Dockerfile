@@ -1,0 +1,19 @@
+FROM golang:1.23-bookworm AS builder
+
+WORKDIR /src
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/opswatch ./cmd/opswatch
+
+# ---
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY --from=builder /bin/opswatch /opswatch
+COPY migrations/ /migrations/
+
+EXPOSE 8080
+USER nonroot:nonroot
+
+ENTRYPOINT ["/opswatch"]
