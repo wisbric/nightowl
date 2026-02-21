@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/pkg/tenant"
 )
 
@@ -24,7 +26,8 @@ type Server struct {
 }
 
 // NewServer creates an HTTP server with middleware and health/metrics endpoints.
-func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry) *Server {
+// oidcAuth may be nil when OIDC is not configured (JWT auth will be unavailable).
+func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
 	s := &Server{
 		Router:  chi.NewRouter(),
 		Logger:  logger,
@@ -39,28 +42,52 @@ func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metrics
 	s.Router.Use(Metrics)
 	s.Router.Use(middleware.Recoverer)
 
-	// Health endpoints
+	// Health endpoints (unauthenticated)
 	s.Router.Get("/healthz", s.handleHealthz)
 	s.Router.Get("/readyz", s.handleReadyz)
 
-	// Prometheus metrics
+	// Prometheus metrics (unauthenticated)
 	s.Router.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
 
-	// Tenant-scoped API routes.
+	// Authenticated, tenant-scoped API routes.
 	s.Router.Route("/api/v1", func(r chi.Router) {
-		r.Use(tenant.Middleware(db, tenant.HeaderResolver{}, logger))
+		// 1. Authenticate: JWT → API key → dev header fallback.
+		r.Use(auth.Middleware(oidcAuth, db, logger))
+
+		// 2. Resolve tenant and set search_path from the authenticated identity.
+		r.Use(tenant.Middleware(db, &authContextResolver{}, logger))
+
+		// 3. Require valid authentication on all /api/v1 routes.
+		r.Use(auth.RequireAuth)
 
 		// Placeholder — domain handlers will be mounted here in later phases.
 		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 			t := tenant.FromContext(r.Context())
+			id := auth.FromContext(r.Context())
 			Respond(w, http.StatusOK, map[string]string{
-				"tenant": t.Slug,
-				"schema": t.Schema,
+				"tenant":  t.Slug,
+				"schema":  t.Schema,
+				"subject": id.Subject,
+				"role":    id.Role,
+				"method":  id.Method,
 			})
 		})
 	})
 
 	return s
+}
+
+// authContextResolver reads the tenant slug from the auth Identity stored in
+// the request context by the auth middleware. This connects authentication to
+// tenant resolution without creating import cycles.
+type authContextResolver struct{}
+
+func (authContextResolver) Resolve(r *http.Request) (string, error) {
+	id := auth.FromContext(r.Context())
+	if id != nil && id.TenantSlug != "" {
+		return id.TenantSlug, nil
+	}
+	return "", fmt.Errorf("no authenticated tenant")
 }
 
 // ServeHTTP implements http.Handler.

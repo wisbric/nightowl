@@ -32,6 +32,10 @@ type Config struct {
 	// Migrations
 	MigrationsGlobalDir string `env:"MIGRATIONS_GLOBAL_DIR" envDefault:"migrations/global"`
 	MigrationsTenantDir string `env:"MIGRATIONS_TENANT_DIR" envDefault:"migrations/tenant"`
+
+	// OIDC (optional — if not set, JWT authentication is disabled)
+	OIDCIssuerURL string `env:"OIDC_ISSUER_URL"`
+	OIDCClientID  string `env:"OIDC_CLIENT_ID"`
 }
 
 // Load reads configuration from environment variables.

@@ -9,9 +9,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/internal/db"
 	"github.com/wisbric/opswatch/pkg/tenant"
 )
+
+// DevAPIKey is the raw API key seeded for development/testing.
+// It is only created by the seed command and should never be used in production.
+const DevAPIKey = "ow_dev_seed_key_do_not_use_in_production"
 
 // Run provisions the "acme" development tenant and populates it with sample
 // users and services. It is idempotent: if the tenant already exists it logs
@@ -115,10 +120,30 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 	}
 	logger.Info("seed: created service", "service", svc2.Name, "id", svc2.ID)
 
+	// Create a development API key (uses the global queries, not tenant-scoped).
+	apiKeyHash := auth.HashAPIKey(DevAPIKey)
+	apiKey, err := q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+		TenantID:    info.ID,
+		KeyHash:     apiKeyHash,
+		KeyPrefix:   DevAPIKey[:16],
+		Description: "Development seed API key",
+		Role:        "admin",
+		Scopes:      []string{"*"},
+	})
+	if err != nil {
+		return fmt.Errorf("creating seed API key: %w", err)
+	}
+	logger.Info("seed: created API key",
+		"id", apiKey.ID,
+		"prefix", apiKey.KeyPrefix,
+		"raw_key", DevAPIKey,
+	)
+
 	logger.Info("seed: completed successfully",
 		"tenant", info.Slug,
 		"users", 2,
 		"services", 2,
+		"api_keys", 1,
 	)
 	return nil
 }

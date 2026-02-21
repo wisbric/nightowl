@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/internal/config"
 	"github.com/wisbric/opswatch/internal/httpserver"
 	"github.com/wisbric/opswatch/internal/platform"
@@ -83,7 +84,20 @@ func Run(ctx context.Context, cfg *config.Config) error {
 }
 
 func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry) error {
-	srv := httpserver.NewServer(logger, db, rdb, metricsReg)
+	// OIDC authenticator (optional — nil if not configured).
+	var oidcAuth *auth.OIDCAuthenticator
+	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "" {
+		var err error
+		oidcAuth, err = auth.NewOIDCAuthenticator(ctx, cfg.OIDCIssuerURL, cfg.OIDCClientID)
+		if err != nil {
+			return fmt.Errorf("initializing OIDC authenticator: %w", err)
+		}
+		logger.Info("OIDC authentication enabled", "issuer", cfg.OIDCIssuerURL)
+	} else {
+		logger.Info("OIDC authentication disabled (OIDC_ISSUER_URL not set)")
+	}
+
+	srv := httpserver.NewServer(logger, db, rdb, metricsReg, oidcAuth)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),
