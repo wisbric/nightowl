@@ -10,6 +10,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/wisbric/opswatch/pkg/tenant"
 )
 
 // Server holds the HTTP server dependencies.
@@ -43,6 +45,20 @@ func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metrics
 
 	// Prometheus metrics
 	s.Router.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
+
+	// Tenant-scoped API routes.
+	s.Router.Route("/api/v1", func(r chi.Router) {
+		r.Use(tenant.Middleware(db, tenant.HeaderResolver{}, logger))
+
+		// Placeholder — domain handlers will be mounted here in later phases.
+		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+			t := tenant.FromContext(r.Context())
+			Respond(w, http.StatusOK, map[string]string{
+				"tenant": t.Slug,
+				"schema": t.Schema,
+			})
+		})
+	})
 
 	return s
 }

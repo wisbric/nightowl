@@ -1,7 +1,17 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "sqlc/queries/"
+    queries:
+      - "sqlc/queries/global/"
+      - "sqlc/queries/users/"
+      - "sqlc/queries/services/"
+      - "sqlc/queries/alerts/"
+      - "sqlc/queries/incidents/"
+      - "sqlc/queries/runbooks/"
+      - "sqlc/queries/rosters/"
+      - "sqlc/queries/escalation/"
+      - "sqlc/queries/audit/"
+      - "sqlc/queries/slack/"
     schema:
       - "sqlc/schema/global.sql"
       - "sqlc/schema/tenant.sql"
@@ -24,6 +34,11 @@ sql:
               import: "time"
               type: "Time"
           - db_type: "jsonb"
-            go_type: "json.RawMessage"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
           - db_type: "inet"
-            go_type: "string"
+            go_type:
+              import: "net/netip"
+              type: "Addr"
+              pointer: true

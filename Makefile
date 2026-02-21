@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt sqlc migrate-up migrate-down docker clean check
+.PHONY: build test test-integration lint fmt sqlc migrate-up migrate-down docker clean check seed
 
 BIN := bin/opswatch
 DATABASE_URL ?= postgres://opswatch:opswatch@localhost:5432/opswatch?sslmode=disable
@@ -30,6 +30,9 @@ migrate-down:
 
 docker:
 	docker build -t opswatch:dev .
+
+seed:
+	go run ./cmd/opswatch -mode seed
 
 clean:
 	rm -rf bin/ coverage.out internal/db/

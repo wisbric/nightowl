@@ -15,6 +15,7 @@ import (
 	"github.com/wisbric/opswatch/internal/config"
 	"github.com/wisbric/opswatch/internal/httpserver"
 	"github.com/wisbric/opswatch/internal/platform"
+	"github.com/wisbric/opswatch/internal/seed"
 	"github.com/wisbric/opswatch/internal/telemetry"
 )
 
@@ -60,6 +61,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}()
 
+	// Run global migrations.
+	if err := platform.RunGlobalMigrations(cfg.DatabaseURL, cfg.MigrationsGlobalDir); err != nil {
+		return fmt.Errorf("running global migrations: %w", err)
+	}
+	logger.Info("global migrations applied")
+
 	// Metrics
 	metricsReg := telemetry.NewMetricsRegistry()
 
@@ -68,6 +75,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return runAPI(ctx, cfg, logger, db, rdb, metricsReg)
 	case "worker":
 		return runWorker(ctx, logger)
+	case "seed":
+		return seed.Run(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
 	default:
 		return fmt.Errorf("unknown mode: %s", cfg.Mode)
 	}
