@@ -92,6 +92,26 @@ type HistoryEntry struct {
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
+// SearchResult is a single result from full-text search with ranking and highlights.
+type SearchResult struct {
+	ID                 uuid.UUID  `json:"id"`
+	Title              string     `json:"title"`
+	Severity           string     `json:"severity"`
+	Category           *string    `json:"category,omitempty"`
+	Services           []string   `json:"services"`
+	Tags               []string   `json:"tags"`
+	Symptoms           *string    `json:"symptoms,omitempty"`
+	RootCause          *string    `json:"root_cause,omitempty"`
+	Solution           *string    `json:"solution,omitempty"`
+	RunbookID          *uuid.UUID `json:"runbook_id,omitempty"`
+	Rank               float32    `json:"rank"`
+	TitleHighlight     string     `json:"title_highlight"`
+	SymptomsHighlight  string     `json:"symptoms_highlight"`
+	SolutionHighlight  string     `json:"solution_highlight"`
+	ResolutionCount    int32      `json:"resolution_count"`
+	CreatedAt          time.Time  `json:"created_at"`
+}
+
 // IncidentRow represents a row returned from the incidents table (excluding search_vector).
 type IncidentRow struct {
 	ID                uuid.UUID

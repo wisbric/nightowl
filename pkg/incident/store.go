@@ -218,6 +218,66 @@ func buildFilterClauses(filters ListFilters) ([]string, []any) {
 	return where, args
 }
 
+// Search performs a full-text search with ranking and ts_headline highlighting.
+func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	sql := `SELECT i.id, i.title, i.severity, i.category, i.services, i.tags,
+		i.symptoms, i.root_cause, i.solution, i.runbook_id,
+		ts_rank(i.search_vector, q) AS rank,
+		ts_headline('english', COALESCE(i.title, ''), q,
+			'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=10') AS title_highlight,
+		ts_headline('english', COALESCE(i.symptoms, ''), q,
+			'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=10') AS symptoms_highlight,
+		ts_headline('english', COALESCE(i.solution, ''), q,
+			'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=15') AS solution_highlight,
+		i.resolution_count, i.created_at
+	FROM incidents i, plainto_tsquery('english', $1) q
+	WHERE i.search_vector @@ q
+	  AND i.merged_into_id IS NULL
+	ORDER BY rank DESC
+	LIMIT $2`
+
+	rows, err := s.dbtx.Query(ctx, sql, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("searching incidents: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		var runbookID pgtype.UUID
+		if err := rows.Scan(
+			&r.ID, &r.Title, &r.Severity, &r.Category, &r.Services, &r.Tags,
+			&r.Symptoms, &r.RootCause, &r.Solution, &runbookID,
+			&r.Rank, &r.TitleHighlight, &r.SymptomsHighlight, &r.SolutionHighlight,
+			&r.ResolutionCount, &r.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning search row: %w", err)
+		}
+		if runbookID.Valid {
+			uid := uuid.UUID(runbookID.Bytes)
+			r.RunbookID = &uid
+		}
+		r.Services = ensureSlice(r.Services)
+		r.Tags = ensureSlice(r.Tags)
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating search rows: %w", err)
+	}
+	return results, nil
+}
+
+// GetByFingerprint returns the first non-merged incident matching the given fingerprint.
+func (s *Store) GetByFingerprint(ctx context.Context, fingerprint string) (IncidentRow, error) {
+	query := `SELECT ` + incidentColumns + ` FROM incidents
+	WHERE $1 = ANY(fingerprints)
+	  AND merged_into_id IS NULL
+	LIMIT 1`
+	row := s.dbtx.QueryRow(ctx, query, fingerprint)
+	return scanIncidentRow(row)
+}
+
 // CreateHistory inserts a history entry for an incident.
 func (s *Store) CreateHistory(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error {
 	query := `INSERT INTO incident_history (incident_id, changed_by, change_type, diff)

@@ -103,6 +103,30 @@ func (s *Service) List(ctx context.Context, filters ListFilters, limit, offset i
 	return items, count, nil
 }
 
+// Search performs a full-text search across incidents.
+func (s *Service) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	results, err := s.store.Search(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("searching incidents: %w", err)
+	}
+	if results == nil {
+		results = []SearchResult{}
+	}
+	return results, nil
+}
+
+// GetByFingerprint finds a single incident matching the given fingerprint.
+func (s *Service) GetByFingerprint(ctx context.Context, fingerprint string) (Response, error) {
+	row, err := s.store.GetByFingerprint(ctx, fingerprint)
+	if err != nil {
+		return Response{}, fmt.Errorf("getting incident by fingerprint: %w", err)
+	}
+	return row.ToResponse(), nil
+}
+
 // Update updates an incident, computes the diff, and records a history entry.
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest, userID pgtype.UUID) (Response, error) {
 	// Fetch current state for diff comparison.

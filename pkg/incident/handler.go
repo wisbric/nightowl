@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -30,6 +31,8 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.handleCreate)
 	r.Get("/", h.handleList)
+	r.Get("/search", h.handleSearch)
+	r.Get("/fingerprint/{fp}", h.handleGetByFingerprint)
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.handleGet)
 		r.Put("/", h.handleUpdate)
@@ -164,4 +167,61 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpserver.Respond(w, http.StatusNoContent, nil)
+}
+
+func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "query parameter 'q' is required")
+		return
+	}
+
+	limit := 25
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "limit must be a positive integer")
+			return
+		}
+		if n > 100 {
+			n = 100
+		}
+		limit = n
+	}
+
+	svc := h.service(r)
+	results, err := svc.Search(r.Context(), q, limit)
+	if err != nil {
+		h.logger.Error("searching incidents", "error", err, "query", q)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to search incidents")
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, map[string]any{
+		"query":   q,
+		"results": results,
+		"count":   len(results),
+	})
+}
+
+func (h *Handler) handleGetByFingerprint(w http.ResponseWriter, r *http.Request) {
+	fp := chi.URLParam(r, "fp")
+	if fp == "" {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "fingerprint is required")
+		return
+	}
+
+	svc := h.service(r)
+	resp, err := svc.GetByFingerprint(r.Context(), fp)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpserver.RespondError(w, http.StatusNotFound, "not_found", "no incident matches this fingerprint")
+			return
+		}
+		h.logger.Error("getting incident by fingerprint", "error", err, "fingerprint", fp)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to get incident by fingerprint")
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, resp)
 }

@@ -199,6 +199,97 @@ func TestDeleteIncident_InvalidID(t *testing.T) {
 	}
 }
 
+func TestSearch_MissingQuery(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	r := httptest.NewRequest(http.MethodGet, "/incidents/search", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSearch_InvalidLimit(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"negative", "/incidents/search?q=test&limit=-1"},
+		{"zero", "/incidents/search?q=test&limit=0"},
+		{"non-numeric", "/incidents/search?q=test&limit=abc"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, tt.query, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
+func TestFingerprint_EmptyFP(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	// chi requires a non-empty URL param, so /fingerprint/ results in 301 redirect
+	// (trailing slash) or 404. The actual empty check is belt-and-suspenders.
+	r := httptest.NewRequest(http.MethodGet, "/incidents/fingerprint/", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	// chi returns 301 for trailing slash redirect
+	if w.Code != http.StatusMovedPermanently && w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 301/400/404", w.Code)
+	}
+}
+
+func TestSearchResult_JSONSerialization(t *testing.T) {
+	result := SearchResult{
+		ID:                uuid.New(),
+		Title:             "Test Incident",
+		Severity:          "critical",
+		Services:          []string{"svc-a"},
+		Tags:              []string{"k8s"},
+		Rank:              0.75,
+		TitleHighlight:    "<mark>Test</mark> Incident",
+		SymptomsHighlight: "",
+		SolutionHighlight: "",
+		ResolutionCount:   3,
+		CreatedAt:         time.Now(),
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal SearchResult: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if decoded["rank"].(float64) != float64(result.Rank) {
+		t.Errorf("rank = %v, want %v", decoded["rank"], result.Rank)
+	}
+	if decoded["title_highlight"] != result.TitleHighlight {
+		t.Errorf("title_highlight = %v, want %v", decoded["title_highlight"], result.TitleHighlight)
+	}
+}
+
 func TestComputeDiff(t *testing.T) {
 	old := IncidentRow{
 		Title:    "Old Title",
