@@ -1,6 +1,7 @@
 package alert
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,8 +10,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/db"
 	"github.com/wisbric/nightowl/internal/httpserver"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
@@ -49,12 +52,29 @@ type keepPayload struct {
 // --- Generic payload types ---
 
 type genericPayload struct {
-	Title       string            `json:"title"`
-	Severity    string            `json:"severity"`
-	Fingerprint string            `json:"fingerprint"`
-	Description string            `json:"description"`
-	Labels      map[string]string `json:"labels"`
-	Source      string            `json:"source"`
+	Title         string            `json:"title"`
+	Severity      string            `json:"severity"`
+	Fingerprint   string            `json:"fingerprint"`
+	Description   string            `json:"description"`
+	Labels        map[string]string `json:"labels"`
+	Source        string            `json:"source"`
+	AgentMetadata *agentMetadata    `json:"agent_metadata,omitempty"`
+}
+
+type agentMetadata struct {
+	AgentID      string  `json:"agent_id"`
+	ActionTaken  string  `json:"action_taken"`
+	ActionResult string  `json:"action_result"`
+	AutoResolved bool    `json:"auto_resolved"`
+	Confidence   float64 `json:"confidence"`
+}
+
+// WebhookMetrics holds the Prometheus metrics for webhook alert processing.
+type WebhookMetrics struct {
+	ReceivedTotal        *prometheus.CounterVec
+	ProcessingDuration   *prometheus.HistogramVec
+	KBHitsTotal          prometheus.Counter
+	AgentResolvedTotal   prometheus.Counter
 }
 
 // WebhookHandler provides HTTP handlers for alert webhook endpoints.
@@ -63,11 +83,12 @@ type WebhookHandler struct {
 	audit   *audit.Writer
 	dedup   *Deduplicator
 	enrich  *Enricher
+	metrics *WebhookMetrics
 }
 
 // NewWebhookHandler creates a WebhookHandler.
-func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher) *WebhookHandler {
-	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich}
+func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher, metrics *WebhookMetrics) *WebhookHandler {
+	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich, metrics: metrics}
 }
 
 // Routes returns a chi.Router with webhook routes mounted.
@@ -77,6 +98,27 @@ func (h *WebhookHandler) Routes() chi.Router {
 	r.Post("/keep", h.handleKeep)
 	r.Post("/generic", h.handleGeneric)
 	return r
+}
+
+// recordReceived increments the received counter for the given source and severity.
+func (h *WebhookHandler) recordReceived(source, severity string) {
+	if h.metrics != nil && h.metrics.ReceivedTotal != nil {
+		h.metrics.ReceivedTotal.WithLabelValues(source, severity).Inc()
+	}
+}
+
+// recordDuration observes the processing duration for the given source.
+func (h *WebhookHandler) recordDuration(source string, start time.Time) {
+	if h.metrics != nil && h.metrics.ProcessingDuration != nil {
+		h.metrics.ProcessingDuration.WithLabelValues(source).Observe(time.Since(start).Seconds())
+	}
+}
+
+// recordKBHit increments the KB hits counter.
+func (h *WebhookHandler) recordKBHit() {
+	if h.metrics != nil && h.metrics.KBHitsTotal != nil {
+		h.metrics.KBHitsTotal.Inc()
+	}
 }
 
 // store creates a per-request Store from the tenant-scoped connection.
@@ -130,6 +172,7 @@ func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized
 			if result.SuggestedSolution != "" {
 				resp.SuggestedSolution = &result.SuggestedSolution
 			}
+			h.recordKBHit()
 		}
 	}
 
@@ -157,6 +200,9 @@ func decodeWebhookBody(r *http.Request, dst any) error {
 // handleAlertmanager processes Alertmanager webhook payloads containing one or
 // more alerts, normalizes each to the internal format, and persists them.
 func (h *WebhookHandler) handleAlertmanager(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer h.recordDuration("alertmanager", start)
+
 	var payload alertmanagerPayload
 	if err := decodeWebhookBody(r, &payload); err != nil {
 		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -169,9 +215,30 @@ func (h *WebhookHandler) handleAlertmanager(w http.ResponseWriter, r *http.Reque
 	}
 
 	store := h.store(r)
+	conn := tenant.ConnFromContext(r.Context())
 	var results []Response
 	for _, a := range payload.Alerts {
 		normalized := normalizeAlertmanager(a)
+		h.recordReceived("alertmanager", normalized.Severity)
+
+		// Auto-resolve: if Alertmanager sends status=resolved, resolve the existing alert.
+		if normalized.Status == "resolved" {
+			q := db.New(conn)
+			row, err := q.ResolveAlertByFingerprint(r.Context(), normalized.Fingerprint)
+			if err != nil {
+				h.logger.Warn("auto-resolve by fingerprint failed", "error", err, "fingerprint", normalized.Fingerprint)
+				continue
+			}
+			resp := alertRowToResponse(row)
+			results = append(results, resp)
+
+			if h.audit != nil {
+				detail, _ := json.Marshal(map[string]string{"title": resp.Title, "source": "alertmanager"})
+				h.audit.LogFromRequest(r, "auto_resolve", "alert", resp.ID, detail)
+			}
+			continue
+		}
+
 		resp, isDup, err := h.createOrDedup(r, store, normalized)
 		if err != nil {
 			h.logger.Error("processing alert from alertmanager", "error", err, "fingerprint", normalized.Fingerprint)
@@ -197,6 +264,9 @@ func (h *WebhookHandler) handleAlertmanager(w http.ResponseWriter, r *http.Reque
 
 // handleKeep processes Keep webhook payloads.
 func (h *WebhookHandler) handleKeep(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer h.recordDuration("keep", start)
+
 	var payload keepPayload
 	if err := decodeWebhookBody(r, &payload); err != nil {
 		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -210,6 +280,7 @@ func (h *WebhookHandler) handleKeep(w http.ResponseWriter, r *http.Request) {
 
 	store := h.store(r)
 	normalized := normalizeKeep(payload)
+	h.recordReceived("keep", normalized.Severity)
 	resp, isDup, err := h.createOrDedup(r, store, normalized)
 	if err != nil {
 		h.logger.Error("processing alert from keep", "error", err)
@@ -231,6 +302,9 @@ func (h *WebhookHandler) handleKeep(w http.ResponseWriter, r *http.Request) {
 
 // handleGeneric processes generic JSON webhook payloads.
 func (h *WebhookHandler) handleGeneric(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer h.recordDuration("generic", start)
+
 	var payload genericPayload
 	if err := decodeWebhookBody(r, &payload); err != nil {
 		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -244,6 +318,7 @@ func (h *WebhookHandler) handleGeneric(w http.ResponseWriter, r *http.Request) {
 
 	store := h.store(r)
 	normalized := normalizeGeneric(payload)
+	h.recordReceived(normalized.Source, normalized.Severity)
 	resp, isDup, err := h.createOrDedup(r, store, normalized)
 	if err != nil {
 		h.logger.Error("processing alert from generic webhook", "error", err)
@@ -251,16 +326,64 @@ func (h *WebhookHandler) handleGeneric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Agent auto-resolve: mark as resolved by agent and auto-create KB entry.
+	if normalized.ResolvedByAgent && !isDup {
+		ctx := r.Context()
+		conn := tenant.ConnFromContext(ctx)
+		q := db.New(conn)
+
+		row, err := q.ResolveAlertByAgent(ctx, db.ResolveAlertByAgentParams{
+			ID:                   resp.ID,
+			AgentResolutionNotes: &normalized.AgentResolutionNotes,
+		})
+		if err != nil {
+			h.logger.Error("resolving alert by agent", "error", err, "id", resp.ID)
+		} else {
+			resp = alertRowToResponse(row)
+		}
+
+		// Auto-create KB entry with the agent's action as the solution.
+		h.createAgentKBEntry(ctx, conn, normalized)
+
+		if h.metrics != nil && h.metrics.AgentResolvedTotal != nil {
+			h.metrics.AgentResolvedTotal.Inc()
+		}
+	}
+
 	if h.audit != nil {
 		action := "create"
 		if isDup {
 			action = "deduplicate"
+		} else if normalized.ResolvedByAgent {
+			action = "agent_resolve"
 		}
 		detail, _ := json.Marshal(map[string]string{"title": resp.Title, "source": normalized.Source})
 		h.audit.LogFromRequest(r, action, "alert", resp.ID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusCreated, resp)
+}
+
+// createAgentKBEntry creates a knowledge base (incident) entry from an agent-resolved alert.
+func (h *WebhookHandler) createAgentKBEntry(ctx context.Context, dbtx db.DBTX, normalized NormalizedAlert) {
+	q := db.New(dbtx)
+	category := "agent-resolved"
+	_, err := q.CreateIncident(ctx, db.CreateIncidentParams{
+		Title:        normalized.Title,
+		Fingerprints: []string{normalized.Fingerprint},
+		Severity:     normalized.Severity,
+		Category:     &category,
+		Tags:         []string{"auto-resolved", "agent"},
+		Services:     []string{},
+		Clusters:     []string{},
+		Namespaces:   []string{},
+		Symptoms:     normalized.Description,
+		ErrorPatterns: []string{},
+		Solution:     &normalized.AgentResolutionNotes,
+	})
+	if err != nil {
+		h.logger.Error("creating agent KB entry", "error", err, "title", normalized.Title)
+	}
 }
 
 // --- Normalization functions ---
@@ -349,14 +472,27 @@ func normalizeGeneric(p genericPayload) NormalizedAlert {
 		source = "generic"
 	}
 
+	status := "firing"
+	var resolvedByAgent bool
+	var agentNotes string
+	if p.AgentMetadata != nil && p.AgentMetadata.AutoResolved {
+		status = "resolved"
+		resolvedByAgent = true
+		agentNotes = fmt.Sprintf("Agent %s: %s (result: %s, confidence: %.2f)",
+			p.AgentMetadata.AgentID, p.AgentMetadata.ActionTaken,
+			p.AgentMetadata.ActionResult, p.AgentMetadata.Confidence)
+	}
+
 	return NormalizedAlert{
-		Fingerprint: fp,
-		Status:      "firing",
-		Severity:    normalizeSeverity(p.Severity),
-		Source:      source,
-		Title:       p.Title,
-		Description: desc,
-		Labels:      labels,
-		Annotations: json.RawMessage(`{}`),
+		Fingerprint:          fp,
+		Status:               status,
+		Severity:             normalizeSeverity(p.Severity),
+		Source:               source,
+		Title:                p.Title,
+		Description:          desc,
+		Labels:               labels,
+		Annotations:          json.RawMessage(`{}`),
+		ResolvedByAgent:      resolvedByAgent,
+		AgentResolutionNotes: agentNotes,
 	}
 }

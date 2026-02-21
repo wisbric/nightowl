@@ -14,14 +14,16 @@ import (
 // NormalizedAlert is the internal representation that all webhook formats
 // normalize to before persisting.
 type NormalizedAlert struct {
-	Fingerprint string
-	Status      string // firing, resolved
-	Severity    string // info, warning, major, critical
-	Source      string // alertmanager, keep, generic, or custom
-	Title       string
-	Description *string
-	Labels      json.RawMessage
-	Annotations json.RawMessage
+	Fingerprint          string
+	Status               string // firing, resolved
+	Severity             string // info, warning, major, critical
+	Source               string // alertmanager, keep, generic, or custom
+	Title                string
+	Description          *string
+	Labels               json.RawMessage
+	Annotations          json.RawMessage
+	ResolvedByAgent      bool
+	AgentResolutionNotes string
 }
 
 // Response is the API response for an alert.

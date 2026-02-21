@@ -33,3 +33,16 @@ RETURNING *;
 UPDATE alerts
 SET occurrence_count = occurrence_count + 1, last_fired_at = now(), updated_at = now()
 WHERE id = $1;
+
+-- name: ResolveAlertByFingerprint :one
+UPDATE alerts
+SET status = 'resolved', resolved_at = now(), updated_at = now()
+WHERE fingerprint = $1 AND status != 'resolved'
+RETURNING *;
+
+-- name: ResolveAlertByAgent :one
+UPDATE alerts
+SET status = 'resolved', resolved_at = now(), resolved_by_agent = true,
+    agent_resolution_notes = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;

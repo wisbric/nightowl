@@ -278,10 +278,60 @@ func TestNormalizeGeneric_Defaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeGeneric_AgentAutoResolved(t *testing.T) {
+	p := genericPayload{
+		Title:    "OOM Kill - payment-gateway",
+		Severity: "warning",
+		Source:   "remediation-agent",
+		AgentMetadata: &agentMetadata{
+			AgentID:      "k8s-healer-01",
+			ActionTaken:  "Increased memory limit",
+			ActionResult: "success",
+			AutoResolved: true,
+			Confidence:   0.95,
+		},
+	}
+
+	n := normalizeGeneric(p)
+
+	if n.Status != "resolved" {
+		t.Errorf("Status = %q, want resolved (agent auto-resolved)", n.Status)
+	}
+	if !n.ResolvedByAgent {
+		t.Error("ResolvedByAgent should be true")
+	}
+	if n.AgentResolutionNotes == "" {
+		t.Error("AgentResolutionNotes should be populated")
+	}
+	if n.Source != "remediation-agent" {
+		t.Errorf("Source = %q, want remediation-agent", n.Source)
+	}
+}
+
+func TestNormalizeGeneric_AgentNotAutoResolved(t *testing.T) {
+	p := genericPayload{
+		Title:  "Alert from agent",
+		Source: "agent",
+		AgentMetadata: &agentMetadata{
+			AgentID:      "k8s-healer-01",
+			AutoResolved: false,
+		},
+	}
+
+	n := normalizeGeneric(p)
+
+	if n.Status != "firing" {
+		t.Errorf("Status = %q, want firing (not auto-resolved)", n.Status)
+	}
+	if n.ResolvedByAgent {
+		t.Error("ResolvedByAgent should be false when auto_resolved is false")
+	}
+}
+
 // --- Handler validation tests ---
 
 func newTestRouter() (*WebhookHandler, chi.Router) {
-	h := NewWebhookHandler(nil, nil, nil, nil)
+	h := NewWebhookHandler(nil, nil, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/webhooks", h.Routes())
 	return h, router
