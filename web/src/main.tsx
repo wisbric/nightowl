@@ -15,6 +15,8 @@ import { EscalationListPage } from "@/pages/escalation-list";
 import { EscalationDetailPage } from "@/pages/escalation-detail";
 import { AdminPage } from "@/pages/admin";
 import { AuditLogPage } from "@/pages/audit-log";
+import { RunbookListPage } from "@/pages/runbook-list";
+import { RunbookDetailPage } from "@/pages/runbook-detail";
 import "./index.css";
 
 initTheme();
@@ -42,6 +44,8 @@ const rostersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/rost
 const rosterDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/rosters/$rosterId", component: RosterDetailPage });
 const escalationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/escalation", component: EscalationListPage });
 const escalationDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/escalation/$policyId", component: EscalationDetailPage });
+const runbooksRoute = createRoute({ getParentRoute: () => rootRoute, path: "/runbooks", component: RunbookListPage });
+const runbookDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/runbooks/$runbookId", component: RunbookDetailPage });
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: AdminPage });
 const auditLogRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/audit-log", component: AuditLogPage });
 
@@ -53,6 +57,8 @@ const routeTree = rootRoute.addChildren([
   incidentDetailRoute,
   rostersRoute,
   rosterDetailRoute,
+  runbooksRoute,
+  runbookDetailRoute,
   escalationRoute,
   escalationDetailRoute,
   adminRoute,

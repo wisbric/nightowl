@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident } from "@/types/api";
+import type { Incident, IncidentHistoryEntry } from "@/types/api";
 import { useState } from "react";
 
 interface IncidentForm {
@@ -31,10 +33,18 @@ export function IncidentDetailPage() {
   const isNew = incidentId === "new";
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(isNew);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [targetId, setTargetId] = useState("");
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ["incident", incidentId],
     queryFn: () => api.get<Incident>(`/incidents/${incidentId}`),
+    enabled: !isNew,
+  });
+
+  const { data: history } = useQuery({
+    queryKey: ["incident-history", incidentId],
+    queryFn: () => api.get<IncidentHistoryEntry[]>(`/incidents/${incidentId}/history`),
     enabled: !isNew,
   });
 
@@ -76,6 +86,24 @@ export function IncidentDetailPage() {
       }
     },
   });
+
+  const mergeMutation = useMutation({
+    mutationFn: (mergeTargetId: string) =>
+      api.post(`/incidents/${incidentId}/merge`, { target_id: mergeTargetId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incident-history", incidentId] });
+      setMergeOpen(false);
+      setTargetId("");
+    },
+  });
+
+  function handleMergeSubmit() {
+    const trimmed = targetId.trim();
+    if (!trimmed) return;
+    mergeMutation.mutate(trimmed);
+  }
 
   if (!isNew && isLoading) return <p className="text-muted-foreground">Loading...</p>;
 
@@ -161,8 +189,46 @@ export function IncidentDetailPage() {
                 <span className="text-sm text-muted-foreground">Resolutions: {incident.resolution_count}</span>
               </div>
             </div>
-            <Button onClick={() => setEditing(true)}>Edit</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setMergeOpen(true)}>Merge</Button>
+              <Button onClick={() => setEditing(true)}>Edit</Button>
+            </div>
           </div>
+
+          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)}>
+            <DialogHeader>
+              <DialogTitle>Merge Incident</DialogTitle>
+            </DialogHeader>
+            <DialogContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Merge this incident into another. The target incident will absorb this incident's data.
+              </p>
+              <div>
+                <label className="text-sm font-medium">Target Incident ID</label>
+                <Input
+                  value={targetId}
+                  onChange={(e) => setTargetId(e.target.value)}
+                  placeholder="Enter target incident ID"
+                />
+              </div>
+              {mergeMutation.isError && (
+                <p className="text-sm text-destructive">
+                  {mergeMutation.error instanceof Error ? mergeMutation.error.message : "Merge failed"}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setMergeOpen(false); setTargetId(""); }}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleMergeSubmit}
+                  disabled={mergeMutation.isPending || !targetId.trim()}
+                >
+                  {mergeMutation.isPending ? "Merging..." : "Merge"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
@@ -209,6 +275,45 @@ export function IncidentDetailPage() {
           <div className="text-xs text-muted-foreground">
             Created {formatRelativeTime(incident.created_at)} &middot; Updated {formatRelativeTime(incident.updated_at)}
           </div>
+
+          {/* History section */}
+          <Card>
+            <CardHeader><CardTitle>History</CardTitle></CardHeader>
+            <CardContent>
+              {history && history.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Field</TableHead>
+                      <TableHead>Old Value</TableHead>
+                      <TableHead>New Value</TableHead>
+                      <TableHead>Changed By</TableHead>
+                      <TableHead>When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="font-medium text-sm">{entry.field}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                          {entry.old_value || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate">
+                          {entry.new_value || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{entry.changed_by}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatRelativeTime(entry.created_at)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-muted-foreground">No history recorded yet.</p>
+              )}
+            </CardContent>
+          </Card>
         </>
       ) : (
         <p className="text-muted-foreground">Incident not found</p>

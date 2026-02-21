@@ -171,6 +171,61 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface MembersResponse {
+  members: RosterMember[];
+  count: number;
+}
+
+export interface OverridesResponse {
+  overrides: Override[];
+  count: number;
+}
+
+export interface Runbook {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  is_template: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RunbooksResponse {
+  items: Runbook[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+}
+
+export interface IncidentHistoryEntry {
+  id: string;
+  incident_id: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  changed_by: string;
+  created_at: string;
+}
+
+export interface DryRunResponse {
+  policy_id: string;
+  policy_name: string;
+  steps: DryRunStep[];
+  total_time_minutes: number;
+}
+
+export interface DryRunStep {
+  tier: number;
+  timeout_minutes: number;
+  cumulative_minutes: number;
+  notify_via: string[];
+  targets: string[];
+  action: string;
+}
+
 export interface User {
   id: string;
   email: string;

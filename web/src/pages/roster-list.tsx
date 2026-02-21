@@ -4,8 +4,9 @@ import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import type { RostersResponse } from "@/types/api";
-import { Clock, Globe } from "lucide-react";
+import { Clock, Globe, Calendar, Plus } from "lucide-react";
 
 export function RosterListPage() {
   useTitle("Rosters");
@@ -18,7 +19,15 @@ export function RosterListPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Rosters</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Rosters</h1>
+        <Link to="/rosters/$rosterId" params={{ rosterId: "new" }}>
+          <Button>
+            <Plus className="h-4 w-4" />
+            Create Roster
+          </Button>
+        </Link>
+      </div>
 
       <Card>
         <CardHeader>
@@ -37,6 +46,7 @@ export function RosterListPage() {
                   <TableHead>Timezone</TableHead>
                   <TableHead>Rotation</TableHead>
                   <TableHead>Handoff</TableHead>
+                  <TableHead>Export</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -54,11 +64,21 @@ export function RosterListPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{roster.handoff_time}</span>
                     </TableCell>
+                    <TableCell>
+                      <a
+                        href={`/api/v1/rosters/${roster.id}/export.ics`}
+                        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        download
+                      >
+                        <Calendar className="h-3 w-3" />
+                        iCal
+                      </a>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {rosters.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No rosters configured</TableCell>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No rosters configured</TableCell>
                   </TableRow>
                 )}
               </TableBody>

@@ -11,8 +11,17 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident, IncidentsResponse, SearchResponse } from "@/types/api";
+import type { Incident, IncidentsResponse, SearchResponse, SearchResult } from "@/types/api";
 import { Search } from "lucide-react";
+
+interface SearchRow {
+  incident: Incident;
+  highlights?: {
+    title_highlight: string;
+    symptoms_highlight: string;
+    solution_highlight: string;
+  };
+}
 
 export function IncidentListPage() {
   useTitle("Knowledge Base");
@@ -23,29 +32,36 @@ export function IncidentListPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["incidents", search, severityFilter],
-    queryFn: async () => {
+    queryFn: async (): Promise<SearchRow[]> => {
       if (isSearch) {
         const res = await api.get<SearchResponse>(`/incidents/search?q=${encodeURIComponent(search)}&limit=50`);
-        return res.results.map((r) => ({
-          id: r.id,
-          title: r.title,
-          severity: r.severity,
-          category: r.category,
-          services: r.services ?? [],
-          tags: r.tags ?? [],
-          resolution_count: r.resolution_count,
-          created_at: r.created_at,
-          updated_at: r.created_at,
-        })) as Incident[];
+        return res.results.map((r: SearchResult) => ({
+          incident: {
+            id: r.id,
+            title: r.title,
+            severity: r.severity,
+            category: r.category,
+            services: r.services ?? [],
+            tags: r.tags ?? [],
+            resolution_count: r.resolution_count,
+            created_at: r.created_at,
+            updated_at: r.created_at,
+          } as Incident,
+          highlights: {
+            title_highlight: r.title_highlight,
+            symptoms_highlight: r.symptoms_highlight,
+            solution_highlight: r.solution_highlight,
+          },
+        }));
       }
       const params = new URLSearchParams();
       if (severityFilter) params.set("severity", severityFilter);
       params.set("limit", "50");
       const res = await api.get<IncidentsResponse>(`/incidents?${params}`);
-      return res.items;
+      return res.items.map((inc) => ({ incident: inc }));
     },
   });
-  const incidents = data ?? [];
+  const rows = data ?? [];
 
   return (
     <div className="space-y-6">
@@ -93,13 +109,29 @@ export function IncidentListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {incidents.map((inc) => (
+                {rows.map(({ incident: inc, highlights }) => (
                   <TableRow key={inc.id}>
                     <TableCell><SeverityBadge severity={inc.severity} /></TableCell>
                     <TableCell>
                       <Link to="/incidents/$incidentId" params={{ incidentId: inc.id }} className="text-sm hover:text-accent transition-colors">
-                        {inc.title}
+                        {highlights?.title_highlight ? (
+                          <span dangerouslySetInnerHTML={{ __html: highlights.title_highlight }} />
+                        ) : (
+                          inc.title
+                        )}
                       </Link>
+                      {highlights?.symptoms_highlight && (
+                        <p
+                          className="text-xs text-muted-foreground mt-1 line-clamp-2"
+                          dangerouslySetInnerHTML={{ __html: highlights.symptoms_highlight }}
+                        />
+                      )}
+                      {highlights?.solution_highlight && (
+                        <p
+                          className="text-xs text-muted-foreground mt-1 line-clamp-2"
+                          dangerouslySetInnerHTML={{ __html: highlights.solution_highlight }}
+                        />
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{inc.category || "—"}</TableCell>
                     <TableCell>
@@ -113,7 +145,7 @@ export function IncidentListPage() {
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(inc.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {incidents.length === 0 && (
+                {rows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       {isSearch ? "No matching incidents" : "No incidents found"}

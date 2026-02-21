@@ -3,11 +3,54 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Link } from "@tanstack/react-router";
 import { formatRelativeTime } from "@/lib/utils";
-import type { AlertsResponse, IncidentsResponse, RostersResponse } from "@/types/api";
+import type { AlertsResponse, IncidentsResponse, OnCallResponse, Roster, RostersResponse } from "@/types/api";
+
+function OnCallRow({ roster }: { roster: Roster }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["roster", roster.id, "oncall"],
+    queryFn: () => api.get<OnCallResponse>(`/rosters/${roster.id}/oncall`),
+  });
+
+  return (
+    <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
+      <span className="font-medium text-sm">{roster.name}</span>
+      <span className="text-muted-foreground text-xs">({roster.timezone})</span>
+      <span className="ml-auto flex items-center gap-2">
+        {isLoading ? (
+          <span className="text-xs text-muted-foreground">Loading...</span>
+        ) : data?.on_call ? (
+          <>
+            {data.on_call.is_override && (
+              <Badge variant="outline" className="text-xs">Override</Badge>
+            )}
+            <span className="text-sm">{data.on_call.roster_name ? data.on_call.user_id : "No one"}</span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">No one</span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function OnCallWidget({ rosters }: { rosters: Roster[] }) {
+  if (rosters.length === 0) {
+    return <p className="mt-1 text-sm text-muted-foreground">No rosters configured</p>;
+  }
+
+  return (
+    <ul className="mt-2 space-y-1">
+      {rosters.map((roster) => (
+        <OnCallRow key={roster.id} roster={roster} />
+      ))}
+    </ul>
+  );
+}
 
 export function DashboardPage() {
   useTitle("Dashboard");
@@ -29,6 +72,7 @@ export function DashboardPage() {
     queryFn: () => api.get<RostersResponse>("/rosters"),
   });
   const rosters = rostersData?.rosters ?? [];
+
   const criticalCount = activeAlerts.filter((a) => a.severity === "critical").length;
   const warningCount = activeAlerts.filter((a) => a.severity === "warning" || a.severity === "major").length;
   const infoCount = activeAlerts.filter((a) => a.severity === "info").length;
@@ -68,22 +112,11 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Rosters</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">On-Call Now</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{rosters.length}</div>
-            {rosters.length > 0 ? (
-              <ul className="mt-2 space-y-1 text-sm">
-                {rosters.map((r) => (
-                  <li key={r.id} className="flex items-center gap-2">
-                    <span className="font-medium">{r.name}</span>
-                    <span className="text-muted-foreground text-xs">({r.timezone})</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">No rosters configured</p>
-            )}
+            <OnCallWidget rosters={rosters} />
           </CardContent>
         </Card>
       </div>
