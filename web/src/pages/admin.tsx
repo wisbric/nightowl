@@ -17,30 +17,30 @@ export function AdminPage() {
       <h1 className="text-2xl font-bold">Administration</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="cursor-pointer hover:border-accent transition-colors">
+        <Card className="opacity-75">
           <CardContent className="flex items-center gap-3 p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
             <div>
               <p className="font-medium">Users</p>
-              <p className="text-xs text-muted-foreground">Manage team members</p>
+              <p className="text-xs text-muted-foreground">Coming soon</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="cursor-pointer hover:border-accent transition-colors">
+        <Card className="opacity-75">
           <CardContent className="flex items-center gap-3 p-4">
             <Key className="h-8 w-8 text-muted-foreground" />
             <div>
               <p className="font-medium">API Keys</p>
-              <p className="text-xs text-muted-foreground">Manage API access</p>
+              <p className="text-xs text-muted-foreground">Coming soon</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="cursor-pointer hover:border-accent transition-colors">
+        <Card className="opacity-75">
           <CardContent className="flex items-center gap-3 p-4">
             <Settings className="h-8 w-8 text-muted-foreground" />
             <div>
               <p className="font-medium">Configuration</p>
-              <p className="text-xs text-muted-foreground">Slack, Twilio, settings</p>
+              <p className="text-xs text-muted-foreground">Coming soon</p>
             </div>
           </CardContent>
         </Card>

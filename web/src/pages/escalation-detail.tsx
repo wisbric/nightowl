@@ -6,15 +6,14 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import type { EscalationPolicy, EscalationEvent } from "@/types/api";
-import { formatRelativeTime } from "@/lib/utils";
+import type { EscalationPolicy } from "@/types/api";
 import { useState } from "react";
 
 interface DryRunStep {
   tier: number;
   delay_minutes: number;
   cumulative_minutes: number;
-  notify_type: string;
+  notify_via: string[];
   targets: string[];
 }
 
@@ -29,11 +28,6 @@ export function EscalationDetailPage() {
   const { data: policy, isLoading } = useQuery({
     queryKey: ["escalation-policy", policyId],
     queryFn: () => api.get<EscalationPolicy>(`/escalation-policies/${policyId}`),
-  });
-
-  const { data: events } = useQuery({
-    queryKey: ["escalation-policy", policyId, "events"],
-    queryFn: () => api.get<EscalationEvent[]>(`/escalation-policies/${policyId}/events`),
   });
 
   useTitle(policy?.name ?? "Escalation Policy");
@@ -76,10 +70,10 @@ export function EscalationDetailPage() {
             </TableHeader>
             <TableBody>
               {policy.tiers?.map((tier) => (
-                <TableRow key={tier.level}>
-                  <TableCell><Badge variant="outline">L{tier.level}</Badge></TableCell>
+                <TableRow key={tier.tier}>
+                  <TableCell><Badge variant="outline">L{tier.tier}</Badge></TableCell>
                   <TableCell className="text-sm">{tier.timeout_minutes} minutes</TableCell>
-                  <TableCell className="text-sm capitalize">{tier.notify_type}</TableCell>
+                  <TableCell className="text-sm capitalize">{tier.notify_via.join(", ")}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {tier.targets.map((t) => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}
@@ -101,7 +95,7 @@ export function EscalationDetailPage() {
                 <div key={step.tier} className="flex items-center gap-4 rounded-md border p-3 text-sm">
                   <Badge variant="outline">L{step.tier}</Badge>
                   <span className="text-muted-foreground">at {step.cumulative_minutes}m</span>
-                  <span className="capitalize">{step.notify_type}</span>
+                  <span className="capitalize">{step.notify_via.join(", ")}</span>
                   <span className="text-muted-foreground">&rarr;</span>
                   <span>{step.targets.join(", ")}</span>
                 </div>
@@ -111,35 +105,6 @@ export function EscalationDetailPage() {
         </Card>
       )}
 
-      {events && events.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>Recent Escalation Events</CardTitle></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Alert</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>When</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell><Badge variant="outline">L{event.tier}</Badge></TableCell>
-                    <TableCell className="font-mono text-xs">{event.alert_id.slice(0, 8)}...</TableCell>
-                    <TableCell className="text-sm capitalize">{event.notify_type}</TableCell>
-                    <TableCell className="text-sm">{event.target}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatRelativeTime(event.notified_at)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

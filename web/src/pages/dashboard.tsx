@@ -7,27 +7,28 @@ import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Link } from "@tanstack/react-router";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Alert, Incident, OnCallEntry } from "@/types/api";
+import type { AlertsResponse, IncidentsResponse, RostersResponse } from "@/types/api";
 
 export function DashboardPage() {
   useTitle("Dashboard");
 
-  const { data: alerts } = useQuery({
+  const { data: alertsData } = useQuery({
     queryKey: ["alerts", "active"],
-    queryFn: () => api.get<Alert[]>("/alerts?status=firing&status=acknowledged&limit=100"),
+    queryFn: () => api.get<AlertsResponse>("/alerts?status=firing&status=acknowledged&limit=100"),
   });
+  const activeAlerts = alertsData?.alerts ?? [];
 
-  const { data: incidents } = useQuery({
+  const { data: incidentsData } = useQuery({
     queryKey: ["incidents", "recent"],
-    queryFn: () => api.get<Incident[]>("/incidents?limit=5"),
+    queryFn: () => api.get<IncidentsResponse>("/incidents?limit=5"),
   });
+  const incidents = incidentsData?.items ?? [];
 
-  const { data: oncall } = useQuery({
-    queryKey: ["rosters", "oncall"],
-    queryFn: () => api.get<OnCallEntry[]>("/rosters/on-call"),
+  const { data: rostersData } = useQuery({
+    queryKey: ["rosters"],
+    queryFn: () => api.get<RostersResponse>("/rosters"),
   });
-
-  const activeAlerts = alerts ?? [];
+  const rosters = rostersData?.rosters ?? [];
   const criticalCount = activeAlerts.filter((a) => a.severity === "critical").length;
   const warningCount = activeAlerts.filter((a) => a.severity === "warning" || a.severity === "major").length;
   const infoCount = activeAlerts.filter((a) => a.severity === "info").length;
@@ -61,26 +62,27 @@ export function DashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Open Incidents</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{incidents?.length ?? 0}</div>
+            <div className="text-3xl font-bold">{incidents.length}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">On-Call Now</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Rosters</CardTitle>
           </CardHeader>
           <CardContent>
-            {oncall && oncall.length > 0 ? (
-              <ul className="space-y-1 text-sm">
-                {oncall.map((e) => (
-                  <li key={e.roster_id} className="flex items-center gap-2">
-                    <span className="font-medium">{e.display_name}</span>
-                    <span className="text-muted-foreground text-xs">({e.roster_name})</span>
+            <div className="text-3xl font-bold">{rosters.length}</div>
+            {rosters.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosters.map((r) => (
+                  <li key={r.id} className="flex items-center gap-2">
+                    <span className="font-medium">{r.name}</span>
+                    <span className="text-muted-foreground text-xs">({r.timezone})</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No on-call data</p>
+              <p className="mt-1 text-sm text-muted-foreground">No rosters configured</p>
             )}
           </CardContent>
         </Card>
@@ -122,7 +124,7 @@ export function DashboardPage() {
                       <SeverityBadge severity={a.severity} />
                       <span className="flex-1 truncate font-mono text-sm">{a.title}</span>
                       <StatusBadge status={a.status} />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(a.created_at)}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(a.first_fired_at)}</span>
                     </Link>
                   </li>
                 ))}
@@ -132,7 +134,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {incidents && incidents.length > 0 && (
+      {incidents.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Recent Incidents</CardTitle>

@@ -1,62 +1,86 @@
+// Response wrappers matching actual API responses
+export interface AlertsResponse {
+  alerts: Alert[];
+  count: number;
+}
+
+export interface IncidentsResponse {
+  items: Incident[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  count: number;
+  query: string;
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  severity: string;
+  category: string;
+  services: string[];
+  tags: string[];
+  solution: string;
+  symptoms: string;
+  root_cause: string;
+  rank: number;
+  title_highlight: string;
+  symptoms_highlight: string;
+  solution_highlight: string;
+  resolution_count: number;
+  created_at: string;
+}
+
+export interface RostersResponse {
+  rosters: Roster[];
+  count: number;
+}
+
+export interface PoliciesResponse {
+  policies: EscalationPolicy[];
+  count: number;
+}
+
 export interface Alert {
   id: string;
   title: string;
-  description: string;
-  severity: "critical" | "major" | "warning" | "info";
-  status: "firing" | "acknowledged" | "resolved" | "suppressed";
+  description?: string;
+  severity: string;
+  status: string;
   source: string;
   fingerprint: string;
-  cluster: string;
-  namespace: string;
-  service: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
   occurrence_count: number;
-  matched_incident_id: string | null;
-  suggested_solution: string | null;
-  acknowledged_by: string | null;
-  acknowledged_at: string | null;
-  resolved_at: string | null;
-  escalation_policy_id: string | null;
-  current_escalation_tier: number;
-  agent_name: string | null;
-  auto_resolved: boolean;
-  created_at: string;
-  updated_at: string;
+  matched_incident_id?: string;
+  suggested_solution?: string;
+  first_fired_at: string;
   last_fired_at: string;
+  created_at: string;
 }
 
 export interface Incident {
   id: string;
   title: string;
-  severity: "critical" | "major" | "warning" | "info";
+  severity: string;
   category: string;
-  status: string;
-  symptoms: string;
-  root_cause: string;
-  solution: string;
-  prevention: string;
+  symptoms: string | null;
+  root_cause: string | null;
+  solution: string | null;
+  prevention: string | null;
   services: string[];
   tags: string[];
   error_patterns: string[];
   fingerprints: string[];
+  clusters: string[];
+  namespaces: string[];
   environment: string;
-  mttr_minutes: number | null;
-  occurrence_count: number;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Runbook {
-  id: string;
-  title: string;
-  category: string;
-  content: string;
-  severity: string;
-  services: string[];
-  tags: string[];
-  created_by: string;
+  resolution_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -66,9 +90,11 @@ export interface Roster {
   name: string;
   timezone: string;
   rotation_type: string;
-  rotation_interval_days: number;
+  rotation_length: number;
   handoff_time: string;
-  members: RosterMember[];
+  is_follow_the_sun: boolean;
+  start_date: string;
+  members?: RosterMember[];
   created_at: string;
   updated_at: string;
 }
@@ -80,15 +106,18 @@ export interface RosterMember {
   position: number;
 }
 
+export interface OnCallResponse {
+  on_call: OnCallEntry | null;
+  message?: string;
+}
+
 export interface OnCallEntry {
+  user_id: string;
   roster_id: string;
   roster_name: string;
-  user_id: string;
-  display_name: string;
-  timezone: string;
-  start_time: string;
-  end_time: string;
   is_override: boolean;
+  shift_start: string;
+  shift_end: string;
 }
 
 export interface Override {
@@ -105,16 +134,17 @@ export interface Override {
 export interface EscalationPolicy {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   tiers: EscalationTier[];
+  repeat_count?: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface EscalationTier {
-  level: number;
+  tier: number;
   timeout_minutes: number;
-  notify_type: string;
+  notify_via: string[];
   targets: string[];
 }
 
@@ -130,12 +160,14 @@ export interface EscalationEvent {
 
 export interface AuditEntry {
   id: string;
-  user_id: string;
-  user_email: string;
+  user_id: string | null;
+  api_key_id: string | null;
   action: string;
-  resource_type: string;
+  resource: string;
   resource_id: string;
-  diff: Record<string, unknown> | null;
+  detail: string;
+  ip_address: string;
+  user_agent: string;
   created_at: string;
 }
 
@@ -146,18 +178,4 @@ export interface User {
   role: string;
   tenant_slug: string;
   created_at: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  per_page: number;
-}
-
-export interface DashboardStats {
-  active_alerts: number;
-  open_incidents: number;
-  avg_mttr_minutes: number;
-  alerts_today: number;
 }

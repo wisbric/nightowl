@@ -6,16 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
-import type { EscalationPolicy } from "@/types/api";
+import type { PoliciesResponse } from "@/types/api";
 import { ArrowUpCircle } from "lucide-react";
 
 export function EscalationListPage() {
   useTitle("Escalation Policies");
 
-  const { data: policies, isLoading } = useQuery({
+  const { data: policiesData, isLoading } = useQuery({
     queryKey: ["escalation-policies"],
-    queryFn: () => api.get<EscalationPolicy[]>("/escalation-policies"),
+    queryFn: () => api.get<PoliciesResponse>("/escalation-policies"),
   });
+  const policies = policiesData?.policies ?? [];
 
   return (
     <div className="space-y-6">
@@ -37,7 +38,7 @@ export function EscalationListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(policies ?? []).map((policy) => (
+                {policies.map((policy) => (
                   <TableRow key={policy.id}>
                     <TableCell>
                       <Link to="/escalation/$policyId" params={{ policyId: policy.id }} className="font-medium text-sm hover:text-accent transition-colors flex items-center gap-2">
@@ -49,8 +50,8 @@ export function EscalationListPage() {
                     <TableCell>
                       <div className="flex gap-1">
                         {policy.tiers?.map((tier) => (
-                          <Badge key={tier.level} variant="outline" className="text-xs">
-                            L{tier.level}: {tier.timeout_minutes}m
+                          <Badge key={tier.tier} variant="outline" className="text-xs">
+                            L{tier.tier}: {tier.timeout_minutes}m
                           </Badge>
                         ))}
                       </div>
@@ -58,7 +59,7 @@ export function EscalationListPage() {
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatRelativeTime(policy.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {(policies ?? []).length === 0 && (
+                {policies.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No escalation policies</TableCell>
                   </TableRow>

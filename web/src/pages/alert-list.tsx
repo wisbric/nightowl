@@ -9,7 +9,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Alert } from "@/types/api";
+import type { AlertsResponse } from "@/types/api";
 
 export function AlertListPage() {
   useTitle("Alerts");
@@ -21,10 +21,11 @@ export function AlertListPage() {
   if (severityFilter) params.set("severity", severityFilter);
   params.set("limit", "100");
 
-  const { data: alerts, isLoading } = useQuery({
+  const { data: alertsData, isLoading } = useQuery({
     queryKey: ["alerts", statusFilter, severityFilter],
-    queryFn: () => api.get<Alert[]>(`/alerts?${params}`),
+    queryFn: () => api.get<AlertsResponse>(`/alerts?${params}`),
   });
+  const alerts = alertsData?.alerts ?? [];
 
   return (
     <div className="space-y-6">
@@ -65,7 +66,7 @@ export function AlertListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(alerts ?? []).map((alert) => (
+                {alerts.map((alert) => (
                   <TableRow key={alert.id}>
                     <TableCell><SeverityBadge severity={alert.severity} /></TableCell>
                     <TableCell>
@@ -75,11 +76,11 @@ export function AlertListPage() {
                     </TableCell>
                     <TableCell><StatusBadge status={alert.status} /></TableCell>
                     <TableCell className="text-muted-foreground text-sm">{alert.source}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{alert.service || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(alert.created_at)}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{alert.labels?.service ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(alert.first_fired_at)}</TableCell>
                   </TableRow>
                 ))}
-                {(alerts ?? []).length === 0 && (
+                {alerts.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No alerts found</TableCell>
                   </TableRow>

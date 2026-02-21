@@ -11,7 +11,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident } from "@/types/api";
+import type { Incident, IncidentsResponse, SearchResponse } from "@/types/api";
 import { Search } from "lucide-react";
 
 export function IncidentListPage() {
@@ -21,18 +21,31 @@ export function IncidentListPage() {
 
   const isSearch = search.length >= 2;
 
-  const { data: incidents, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["incidents", search, severityFilter],
-    queryFn: () => {
+    queryFn: async () => {
       if (isSearch) {
-        return api.get<Incident[]>(`/incidents/search?q=${encodeURIComponent(search)}&limit=50`);
+        const res = await api.get<SearchResponse>(`/incidents/search?q=${encodeURIComponent(search)}&limit=50`);
+        return res.results.map((r) => ({
+          id: r.id,
+          title: r.title,
+          severity: r.severity,
+          category: r.category,
+          services: r.services ?? [],
+          tags: r.tags ?? [],
+          resolution_count: r.resolution_count,
+          created_at: r.created_at,
+          updated_at: r.created_at,
+        })) as Incident[];
       }
       const params = new URLSearchParams();
       if (severityFilter) params.set("severity", severityFilter);
       params.set("limit", "50");
-      return api.get<Incident[]>(`/incidents?${params}`);
+      const res = await api.get<IncidentsResponse>(`/incidents?${params}`);
+      return res.items;
     },
   });
+  const incidents = data ?? [];
 
   return (
     <div className="space-y-6">
@@ -80,7 +93,7 @@ export function IncidentListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(incidents ?? []).map((inc) => (
+                {incidents.map((inc) => (
                   <TableRow key={inc.id}>
                     <TableCell><SeverityBadge severity={inc.severity} /></TableCell>
                     <TableCell>
@@ -96,11 +109,11 @@ export function IncidentListPage() {
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{inc.occurrence_count}</TableCell>
+                    <TableCell className="text-sm">{inc.resolution_count}</TableCell>
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(inc.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {(incidents ?? []).length === 0 && (
+                {incidents.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       {isSearch ? "No matching incidents" : "No incidents found"}

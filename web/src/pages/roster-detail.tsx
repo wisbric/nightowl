@@ -37,7 +37,7 @@ export function RosterDetailPage() {
           <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div><span className="text-muted-foreground">Timezone:</span> {roster.timezone}</div>
-            <div><span className="text-muted-foreground">Rotation:</span> <span className="capitalize">{roster.rotation_type}</span> ({roster.rotation_interval_days} days)</div>
+            <div><span className="text-muted-foreground">Rotation:</span> <span className="capitalize">{roster.rotation_type}</span> ({roster.rotation_length} days)</div>
             <div><span className="text-muted-foreground">Handoff:</span> {roster.handoff_time}</div>
           </CardContent>
         </Card>
@@ -45,9 +45,9 @@ export function RosterDetailPage() {
         <Card>
           <CardHeader><CardTitle>Members</CardTitle></CardHeader>
           <CardContent>
-            {roster.members?.length > 0 ? (
+            {(roster.members ?? []).length > 0 ? (
               <ul className="space-y-2">
-                {roster.members.map((m) => (
+                {(roster.members ?? []).map((m) => (
                   <li key={m.id} className="flex items-center gap-2 text-sm">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
                       {m.position + 1}

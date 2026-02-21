@@ -21,11 +21,9 @@ interface IncidentForm {
   symptoms: string;
   root_cause: string;
   solution: string;
-  prevention: string;
   services: string;
   tags: string;
   error_patterns: string;
-  environment: string;
 }
 
 export function IncidentDetailPage() {
@@ -48,14 +46,12 @@ export function IncidentDetailPage() {
           title: incident.title,
           severity: incident.severity,
           category: incident.category,
-          symptoms: incident.symptoms,
-          root_cause: incident.root_cause,
-          solution: incident.solution,
-          prevention: incident.prevention,
+          symptoms: incident.symptoms ?? "",
+          root_cause: incident.root_cause ?? "",
+          solution: incident.solution ?? "",
           services: (incident.services ?? []).join(", "),
           tags: (incident.tags ?? []).join(", "),
           error_patterns: (incident.error_patterns ?? []).join("\n"),
-          environment: incident.environment,
         }
       : undefined,
   });
@@ -127,11 +123,7 @@ export function IncidentDetailPage() {
                 <label className="text-sm font-medium">Solution</label>
                 <Textarea {...register("solution")} rows={5} />
               </div>
-              <div>
-                <label className="text-sm font-medium">Prevention</label>
-                <Textarea {...register("prevention")} rows={3} />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Services (comma-separated)</label>
                   <Input {...register("services")} />
@@ -139,10 +131,6 @@ export function IncidentDetailPage() {
                 <div>
                   <label className="text-sm font-medium">Tags (comma-separated)</label>
                   <Input {...register("tags")} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Environment</label>
-                  <Input {...register("environment")} />
                 </div>
               </div>
               <div>
@@ -170,7 +158,7 @@ export function IncidentDetailPage() {
               <div className="mt-2 flex items-center gap-3">
                 <SeverityBadge severity={incident.severity} />
                 {incident.category && <Badge variant="outline">{incident.category}</Badge>}
-                <span className="text-sm text-muted-foreground">Occurrences: {incident.occurrence_count}</span>
+                <span className="text-sm text-muted-foreground">Resolutions: {incident.resolution_count}</span>
               </div>
             </div>
             <Button onClick={() => setEditing(true)}>Edit</Button>
@@ -191,13 +179,6 @@ export function IncidentDetailPage() {
             <CardHeader><CardTitle>Solution</CardTitle></CardHeader>
             <CardContent><p className="text-sm whitespace-pre-wrap">{incident.solution || "—"}</p></CardContent>
           </Card>
-
-          {incident.prevention && (
-            <Card>
-              <CardHeader><CardTitle>Prevention</CardTitle></CardHeader>
-              <CardContent><p className="text-sm whitespace-pre-wrap">{incident.prevention}</p></CardContent>
-            </Card>
-          )}
 
           <div className="flex flex-wrap gap-4">
             {incident.services?.length > 0 && (
@@ -227,7 +208,6 @@ export function IncidentDetailPage() {
 
           <div className="text-xs text-muted-foreground">
             Created {formatRelativeTime(incident.created_at)} &middot; Updated {formatRelativeTime(incident.updated_at)}
-            {incident.mttr_minutes != null && <> &middot; MTTR: {incident.mttr_minutes}m</>}
           </div>
         </>
       ) : (

@@ -64,14 +64,14 @@ export function AuditLogPage() {
                 {(entries ?? []).map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatRelativeTime(entry.created_at)}</TableCell>
-                    <TableCell className="text-sm">{entry.user_email || entry.user_id}</TableCell>
+                    <TableCell className="text-sm font-mono text-xs">{entry.user_id ? entry.user_id.slice(0, 8) : entry.api_key_id?.slice(0, 8) ?? "system"}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{entry.action}</Badge></TableCell>
                     <TableCell className="text-sm">
-                      <span className="text-muted-foreground">{entry.resource_type}</span>
-                      <span className="font-mono text-xs ml-1">{entry.resource_id?.slice(0, 8)}...</span>
+                      <span className="text-muted-foreground">{entry.resource}</span>
+                      <span className="font-mono text-xs ml-1">{entry.resource_id.slice(0, 8)}...</span>
                     </TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground max-w-xs truncate">
-                      {entry.diff ? JSON.stringify(entry.diff).slice(0, 80) : "—"}
+                      {entry.detail ? (() => { try { return atob(entry.detail).slice(0, 80); } catch { return entry.detail.slice(0, 80); } })() : "—"}
                     </TableCell>
                   </TableRow>
                 ))}

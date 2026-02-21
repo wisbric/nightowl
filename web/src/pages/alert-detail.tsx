@@ -76,15 +76,12 @@ export function AlertDetailPage() {
             {alert.description && <div><span className="text-muted-foreground">Description:</span><p className="mt-1">{alert.description}</p></div>}
             <div className="grid grid-cols-2 gap-2">
               <div><span className="text-muted-foreground">Source:</span> {alert.source}</div>
-              <div><span className="text-muted-foreground">Service:</span> {alert.service || "—"}</div>
-              <div><span className="text-muted-foreground">Cluster:</span> {alert.cluster || "—"}</div>
-              <div><span className="text-muted-foreground">Namespace:</span> {alert.namespace || "—"}</div>
-              <div><span className="text-muted-foreground">Created:</span> {formatRelativeTime(alert.created_at)}</div>
+              <div><span className="text-muted-foreground">Service:</span> {alert.labels?.service ?? "—"}</div>
+              <div><span className="text-muted-foreground">Cluster:</span> {alert.labels?.cluster ?? "—"}</div>
+              <div><span className="text-muted-foreground">Namespace:</span> {alert.labels?.namespace ?? "—"}</div>
+              <div><span className="text-muted-foreground">First fired:</span> {formatRelativeTime(alert.first_fired_at)}</div>
               <div><span className="text-muted-foreground">Last fired:</span> {formatRelativeTime(alert.last_fired_at)}</div>
             </div>
-            {alert.acknowledged_by && (
-              <div><span className="text-muted-foreground">Acknowledged by:</span> {alert.acknowledged_by} ({formatRelativeTime(alert.acknowledged_at!)})</div>
-            )}
             {alert.fingerprint && <div><span className="text-muted-foreground">Fingerprint:</span> <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{alert.fingerprint}</code></div>}
           </CardContent>
         </Card>
@@ -105,9 +102,6 @@ export function AlertDetailPage() {
                 <span className="text-muted-foreground">Suggested solution:</span>
                 <p className="mt-1 rounded-md bg-muted p-3">{alert.suggested_solution}</p>
               </div>
-            )}
-            {alert.agent_name && (
-              <div><span className="text-muted-foreground">Agent:</span> {alert.agent_name} {alert.auto_resolved && <Badge variant="secondary">Auto-resolved</Badge>}</div>
             )}
           </CardContent>
         </Card>
