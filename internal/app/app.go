@@ -19,6 +19,7 @@ import (
 	"github.com/wisbric/opswatch/internal/seed"
 	"github.com/wisbric/opswatch/internal/telemetry"
 	"github.com/wisbric/opswatch/pkg/incident"
+	"github.com/wisbric/opswatch/pkg/runbook"
 )
 
 // Run is the main application entry point. It reads config, connects to
@@ -103,6 +104,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	// Mount domain handlers.
 	incidentHandler := incident.NewHandler(logger)
 	srv.APIRouter.Mount("/incidents", incidentHandler.Routes())
+
+	runbookHandler := runbook.NewHandler(logger)
+	srv.APIRouter.Mount("/runbooks", runbookHandler.Routes())
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),

@@ -11,6 +11,7 @@ import (
 
 	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/opswatch/pkg/runbook"
 	"github.com/wisbric/opswatch/pkg/tenant"
 )
 
@@ -119,6 +120,22 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 		return fmt.Errorf("creating service ingress-nginx: %w", err)
 	}
 	logger.Info("seed: created service", "service", svc2.Name, "id", svc2.ID)
+
+	// Seed runbook templates.
+	rbStore := runbook.NewStore(conn)
+	templates := runbook.TemplateRunbooks()
+	for _, tmpl := range templates {
+		if _, err := rbStore.Create(ctx, runbook.CreateParams{
+			Title:      tmpl.Title,
+			Content:    tmpl.Content,
+			Category:   tmpl.Category,
+			IsTemplate: true,
+			Tags:       tmpl.Tags,
+		}); err != nil {
+			return fmt.Errorf("seeding runbook template %q: %w", tmpl.Title, err)
+		}
+	}
+	logger.Info("seed: created runbook templates", "count", len(templates))
 
 	// Create a development API key (uses the global queries, not tenant-scoped).
 	apiKeyHash := auth.HashAPIKey(DevAPIKey)
