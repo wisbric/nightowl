@@ -39,6 +39,11 @@ type Config struct {
 	// OIDC (optional — if not set, JWT authentication is disabled)
 	OIDCIssuerURL string `env:"OIDC_ISSUER_URL"`
 	OIDCClientID  string `env:"OIDC_CLIENT_ID"`
+
+	// Slack (optional — if not set, Slack integration is disabled)
+	SlackBotToken     string `env:"SLACK_BOT_TOKEN"`
+	SlackSigningSecret string `env:"SLACK_SIGNING_SECRET"`
+	SlackAlertChannel string `env:"SLACK_ALERT_CHANNEL"` // e.g. "#alerts" or channel ID
 }
 
 // Load reads configuration from environment variables.

@@ -69,6 +69,17 @@ var KBHitsTotal = prometheus.NewCounter(
 	},
 )
 
+// SlackNotificationsTotal counts Slack notifications sent by type.
+var SlackNotificationsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "nightowl",
+		Subsystem: "slack",
+		Name:      "notifications_total",
+		Help:      "Total number of Slack notifications sent by type.",
+	},
+	[]string{"type"},
+)
+
 // AlertsEscalatedTotal counts alerts escalated per tier.
 var AlertsEscalatedTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
@@ -93,6 +104,7 @@ func NewMetricsRegistry() *prometheus.Registry {
 		AlertProcessingDuration,
 		KBHitsTotal,
 		AlertsEscalatedTotal,
+		SlackNotificationsTotal,
 	)
 	return reg
 }

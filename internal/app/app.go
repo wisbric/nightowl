@@ -25,6 +25,7 @@ import (
 	"github.com/wisbric/nightowl/pkg/integration"
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
+	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
 )
 
 // Run is the main application entry point. It reads config, connects to
@@ -143,6 +144,17 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
+
+	// Slack routes (outside auth middleware — verified by Slack signing secret).
+	slackNotifier := nightowlslack.NewNotifier(cfg.SlackBotToken, cfg.SlackAlertChannel, logger)
+	slackHandler := nightowlslack.NewHandler(slackNotifier, db, logger, cfg.SlackSigningSecret, "devco")
+	srv.Router.Mount("/api/v1/slack", slackHandler.Routes())
+
+	if slackNotifier.IsEnabled() {
+		logger.Info("slack integration enabled", "channel", cfg.SlackAlertChannel)
+	} else {
+		logger.Info("slack integration disabled (SLACK_BOT_TOKEN not set)")
+	}
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),
