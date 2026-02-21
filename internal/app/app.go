@@ -115,7 +115,8 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	runbookHandler := runbook.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/runbooks", runbookHandler.Routes())
 
-	webhookHandler := alert.NewWebhookHandler(logger, auditWriter)
+	dedup := alert.NewDeduplicator(rdb, logger, telemetry.AlertsDeduplicatedTotal)
+	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup)
 	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
 
 	auditHandler := audit.NewHandler(logger)

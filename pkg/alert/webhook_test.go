@@ -281,7 +281,7 @@ func TestNormalizeGeneric_Defaults(t *testing.T) {
 // --- Handler validation tests ---
 
 func newTestRouter() (*WebhookHandler, chi.Router) {
-	h := NewWebhookHandler(nil, nil)
+	h := NewWebhookHandler(nil, nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/webhooks", h.Routes())
 	return h, router

@@ -61,11 +61,12 @@ type genericPayload struct {
 type WebhookHandler struct {
 	logger *slog.Logger
 	audit  *audit.Writer
+	dedup  *Deduplicator
 }
 
 // NewWebhookHandler creates a WebhookHandler.
-func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer) *WebhookHandler {
-	return &WebhookHandler{logger: logger, audit: audit}
+func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator) *WebhookHandler {
+	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup}
 }
 
 // Routes returns a chi.Router with webhook routes mounted.
@@ -81,6 +82,46 @@ func (h *WebhookHandler) Routes() chi.Router {
 func (h *WebhookHandler) store(r *http.Request) *Store {
 	conn := tenant.ConnFromContext(r.Context())
 	return NewStore(conn)
+}
+
+// tenantSchema returns the tenant schema name from the request context.
+func tenantSchema(r *http.Request) string {
+	if info := tenant.FromContext(r.Context()); info != nil {
+		return info.Schema
+	}
+	return "unknown"
+}
+
+// createOrDedup checks for a duplicate alert and either increments the existing
+// alert's occurrence count or creates a new one.
+func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized NormalizedAlert) (Response, bool, error) {
+	ctx := r.Context()
+	conn := tenant.ConnFromContext(ctx)
+	schema := tenantSchema(r)
+
+	if h.dedup != nil && normalized.Status == "firing" {
+		result, err := h.dedup.Check(ctx, schema, normalized.Fingerprint, conn)
+		if err != nil {
+			h.logger.Warn("dedup check failed, creating new alert", "error", err)
+		} else if result.IsDuplicate {
+			resp, err := h.dedup.IncrementAndReturn(ctx, conn, result.AlertID)
+			if err != nil {
+				return Response{}, false, fmt.Errorf("incrementing duplicate alert: %w", err)
+			}
+			return resp, true, nil
+		}
+	}
+
+	resp, err := store.Create(ctx, normalized)
+	if err != nil {
+		return Response{}, false, fmt.Errorf("creating alert: %w", err)
+	}
+
+	if h.dedup != nil {
+		h.dedup.RecordNew(ctx, schema, normalized.Fingerprint, resp.ID)
+	}
+
+	return resp, false, nil
 }
 
 // decodeWebhookBody reads and decodes a webhook JSON body.
@@ -119,16 +160,20 @@ func (h *WebhookHandler) handleAlertmanager(w http.ResponseWriter, r *http.Reque
 	var results []Response
 	for _, a := range payload.Alerts {
 		normalized := normalizeAlertmanager(a)
-		resp, err := store.Create(r.Context(), normalized)
+		resp, isDup, err := h.createOrDedup(r, store, normalized)
 		if err != nil {
-			h.logger.Error("creating alert from alertmanager", "error", err, "fingerprint", normalized.Fingerprint)
+			h.logger.Error("processing alert from alertmanager", "error", err, "fingerprint", normalized.Fingerprint)
 			continue
 		}
 		results = append(results, resp)
 
 		if h.audit != nil {
+			action := "create"
+			if isDup {
+				action = "deduplicate"
+			}
 			detail, _ := json.Marshal(map[string]string{"title": resp.Title, "source": "alertmanager"})
-			h.audit.LogFromRequest(r, "create", "alert", resp.ID, detail)
+			h.audit.LogFromRequest(r, action, "alert", resp.ID, detail)
 		}
 	}
 
@@ -153,16 +198,20 @@ func (h *WebhookHandler) handleKeep(w http.ResponseWriter, r *http.Request) {
 
 	store := h.store(r)
 	normalized := normalizeKeep(payload)
-	resp, err := store.Create(r.Context(), normalized)
+	resp, isDup, err := h.createOrDedup(r, store, normalized)
 	if err != nil {
-		h.logger.Error("creating alert from keep", "error", err)
-		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to create alert")
+		h.logger.Error("processing alert from keep", "error", err)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to process alert")
 		return
 	}
 
 	if h.audit != nil {
+		action := "create"
+		if isDup {
+			action = "deduplicate"
+		}
 		detail, _ := json.Marshal(map[string]string{"title": resp.Title, "source": "keep"})
-		h.audit.LogFromRequest(r, "create", "alert", resp.ID, detail)
+		h.audit.LogFromRequest(r, action, "alert", resp.ID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusCreated, resp)
@@ -183,16 +232,20 @@ func (h *WebhookHandler) handleGeneric(w http.ResponseWriter, r *http.Request) {
 
 	store := h.store(r)
 	normalized := normalizeGeneric(payload)
-	resp, err := store.Create(r.Context(), normalized)
+	resp, isDup, err := h.createOrDedup(r, store, normalized)
 	if err != nil {
-		h.logger.Error("creating alert from generic webhook", "error", err)
-		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to create alert")
+		h.logger.Error("processing alert from generic webhook", "error", err)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to process alert")
 		return
 	}
 
 	if h.audit != nil {
+		action := "create"
+		if isDup {
+			action = "deduplicate"
+		}
 		detail, _ := json.Marshal(map[string]string{"title": resp.Title, "source": normalized.Source})
-		h.audit.LogFromRequest(r, "create", "alert", resp.ID, detail)
+		h.audit.LogFromRequest(r, action, "alert", resp.ID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusCreated, resp)
