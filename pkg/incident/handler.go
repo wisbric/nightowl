@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Get("/", h.handleGet)
 		r.Put("/", h.handleUpdate)
 		r.Delete("/", h.handleDelete)
+		r.Post("/merge", h.handleMerge)
 	})
 	return r
 }
@@ -202,6 +204,45 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		"results": results,
 		"count":   len(results),
 	})
+}
+
+func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid target incident ID")
+		return
+	}
+
+	var req MergeRequest
+	if !httpserver.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	sourceID, err := uuid.Parse(req.SourceID)
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid source_id")
+		return
+	}
+
+	svc := h.service(r)
+	resp, err := svc.Merge(r.Context(), targetID, sourceID, callerUUID(r))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpserver.RespondError(w, http.StatusNotFound, "not_found", "incident not found")
+			return
+		}
+		// Surface specific validation errors as 422.
+		msg := err.Error()
+		if strings.Contains(msg, "cannot merge") || strings.Contains(msg, "already merged") {
+			httpserver.RespondError(w, http.StatusUnprocessableEntity, "merge_error", msg)
+			return
+		}
+		h.logger.Error("merging incidents", "error", err, "target", targetID, "source", sourceID)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to merge incidents")
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleGetByFingerprint(w http.ResponseWriter, r *http.Request) {

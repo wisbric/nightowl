@@ -278,6 +278,31 @@ func (s *Store) GetByFingerprint(ctx context.Context, fingerprint string) (Incid
 	return scanIncidentRow(row)
 }
 
+// SetMergedInto marks the source incident as merged into the target.
+func (s *Store) SetMergedInto(ctx context.Context, sourceID, targetID uuid.UUID) error {
+	query := `UPDATE incidents SET merged_into_id = $2, updated_at = now()
+	WHERE id = $1 AND merged_into_id IS NULL`
+	tag, err := s.dbtx.Exec(ctx, query, sourceID, targetID)
+	if err != nil {
+		return fmt.Errorf("setting merged_into_id: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// ReassignAlerts updates all alerts that reference the source incident to point to the target.
+func (s *Store) ReassignAlerts(ctx context.Context, sourceID, targetID uuid.UUID) (int64, error) {
+	query := `UPDATE alerts SET matched_incident_id = $2, updated_at = now()
+	WHERE matched_incident_id = $1`
+	tag, err := s.dbtx.Exec(ctx, query, sourceID, targetID)
+	if err != nil {
+		return 0, fmt.Errorf("reassigning alerts: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // CreateHistory inserts a history entry for an incident.
 func (s *Store) CreateHistory(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error {
 	query := `INSERT INTO incident_history (incident_id, changed_by, change_type, diff)

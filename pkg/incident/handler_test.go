@@ -361,6 +361,141 @@ func TestEnsureSlice(t *testing.T) {
 	}
 }
 
+func TestMerge_InvalidTargetID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	body := `{"source_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	r := httptest.NewRequest(http.MethodPost, "/incidents/not-a-uuid/merge", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestMerge_MissingSourceID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	id := uuid.New()
+	body := `{}`
+	r := httptest.NewRequest(http.MethodPost, "/incidents/"+id.String()+"/merge", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want %d; body = %s", w.Code, http.StatusUnprocessableEntity, w.Body.String())
+	}
+}
+
+func TestMerge_InvalidSourceID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	id := uuid.New()
+	body := `{"source_id":"not-valid"}`
+	r := httptest.NewRequest(http.MethodPost, "/incidents/"+id.String()+"/merge", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want %d; body = %s", w.Code, http.StatusUnprocessableEntity, w.Body.String())
+	}
+}
+
+func TestUnionSlice(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b []string
+		want []string
+	}{
+		{"both empty", nil, nil, []string{}},
+		{"a only", []string{"x", "y"}, nil, []string{"x", "y"}},
+		{"b only", nil, []string{"a"}, []string{"a"}},
+		{"no overlap", []string{"a"}, []string{"b"}, []string{"a", "b"}},
+		{"with overlap", []string{"a", "b"}, []string{"b", "c"}, []string{"a", "b", "c"}},
+		{"duplicates in a", []string{"a", "a"}, []string{"b"}, []string{"a", "b"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := unionSlice(tt.a, tt.b)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len = %d, want %d; got %v", len(got), len(tt.want), got)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestBestSeverity(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want string
+	}{
+		{"info", "warning", "warning"},
+		{"critical", "warning", "critical"},
+		{"major", "critical", "critical"},
+		{"warning", "warning", "warning"},
+		{"info", "critical", "critical"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.a+"_"+tt.b, func(t *testing.T) {
+			if got := bestSeverity(tt.a, tt.b); got != tt.want {
+				t.Errorf("bestSeverity(%q, %q) = %q, want %q", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBestText(t *testing.T) {
+	short := "short"
+	long := "this is a longer solution text"
+
+	t.Run("both nil", func(t *testing.T) {
+		if got := bestText(nil, nil); got != nil {
+			t.Errorf("expected nil, got %q", *got)
+		}
+	})
+	t.Run("a nil", func(t *testing.T) {
+		got := bestText(nil, &short)
+		if got == nil || *got != short {
+			t.Errorf("expected %q", short)
+		}
+	})
+	t.Run("b nil", func(t *testing.T) {
+		got := bestText(&short, nil)
+		if got == nil || *got != short {
+			t.Errorf("expected %q", short)
+		}
+	})
+	t.Run("b longer", func(t *testing.T) {
+		got := bestText(&short, &long)
+		if got == nil || *got != long {
+			t.Errorf("expected %q, got %q", long, *got)
+		}
+	})
+	t.Run("a longer", func(t *testing.T) {
+		got := bestText(&long, &short)
+		if got == nil || *got != long {
+			t.Errorf("expected %q, got %q", long, *got)
+		}
+	})
+}
+
 func TestParseUUIDPtr(t *testing.T) {
 	t.Run("nil input", func(t *testing.T) {
 		result, err := ParseUUIDPtr(nil)

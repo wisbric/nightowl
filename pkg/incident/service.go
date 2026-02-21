@@ -186,6 +186,138 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, userID pgtype.UUID) 
 	return nil
 }
 
+// Merge merges the source incident into the target incident.
+// Combined fields: fingerprints, services, tags, clusters, namespaces, error_patterns.
+// The longer solution wins. Source is marked as merged into target.
+// All alerts referencing source are reassigned to target.
+func (s *Service) Merge(ctx context.Context, targetID, sourceID uuid.UUID, userID pgtype.UUID) (Response, error) {
+	if targetID == sourceID {
+		return Response{}, fmt.Errorf("cannot merge an incident into itself")
+	}
+
+	target, err := s.store.Get(ctx, targetID)
+	if err != nil {
+		return Response{}, fmt.Errorf("getting target incident: %w", err)
+	}
+	if target.MergedIntoID.Valid {
+		return Response{}, fmt.Errorf("target incident is already merged")
+	}
+
+	source, err := s.store.Get(ctx, sourceID)
+	if err != nil {
+		return Response{}, fmt.Errorf("getting source incident: %w", err)
+	}
+	if source.MergedIntoID.Valid {
+		return Response{}, fmt.Errorf("source incident is already merged")
+	}
+
+	// Build merged fields.
+	merged := UpdateParams{
+		ID:            targetID,
+		Title:         target.Title,
+		Fingerprints:  unionSlice(target.Fingerprints, source.Fingerprints),
+		Severity:      bestSeverity(target.Severity, source.Severity),
+		Category:      target.Category,
+		Tags:          unionSlice(target.Tags, source.Tags),
+		Services:      unionSlice(target.Services, source.Services),
+		Clusters:      unionSlice(target.Clusters, source.Clusters),
+		Namespaces:    unionSlice(target.Namespaces, source.Namespaces),
+		Symptoms:      bestText(target.Symptoms, source.Symptoms),
+		ErrorPatterns: unionSlice(target.ErrorPatterns, source.ErrorPatterns),
+		RootCause:     bestText(target.RootCause, source.RootCause),
+		Solution:      bestText(target.Solution, source.Solution),
+		RunbookID:     bestUUID(target.RunbookID, source.RunbookID),
+	}
+
+	// Update target with merged data.
+	updated, err := s.store.Update(ctx, merged)
+	if err != nil {
+		return Response{}, fmt.Errorf("updating target with merged data: %w", err)
+	}
+
+	// Mark source as merged into target.
+	if err := s.store.SetMergedInto(ctx, sourceID, targetID); err != nil {
+		return Response{}, fmt.Errorf("marking source as merged: %w", err)
+	}
+
+	// Reassign alerts from source to target.
+	reassigned, err := s.store.ReassignAlerts(ctx, sourceID, targetID)
+	if err != nil {
+		s.logger.Warn("failed to reassign alerts during merge", "error", err,
+			"source_id", sourceID, "target_id", targetID)
+	}
+
+	// Record merge history on target.
+	targetDiff, _ := json.Marshal(map[string]any{
+		"merged_source_id":   sourceID,
+		"reassigned_alerts":  reassigned,
+		"added_fingerprints": source.Fingerprints,
+	})
+	if histErr := s.store.CreateHistory(ctx, targetID, userID, "merged", targetDiff); histErr != nil {
+		s.logger.Warn("failed to record merge history on target", "error", histErr, "incident_id", targetID)
+	}
+
+	// Record merge history on source.
+	sourceDiff, _ := json.Marshal(map[string]any{
+		"merged_into_id": targetID,
+	})
+	if histErr := s.store.CreateHistory(ctx, sourceID, userID, "merged", sourceDiff); histErr != nil {
+		s.logger.Warn("failed to record merge history on source", "error", histErr, "incident_id", sourceID)
+	}
+
+	return updated.ToResponse(), nil
+}
+
+// unionSlice returns the deduplicated union of two string slices, preserving order.
+func unionSlice(a, b []string) []string {
+	seen := make(map[string]bool, len(a))
+	result := make([]string, 0, len(a)+len(b))
+	for _, s := range a {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range b {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// bestText returns the longer of two optional text values, preferring the first if equal.
+func bestText(a, b *string) *string {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	if len(*b) > len(*a) {
+		return b
+	}
+	return a
+}
+
+// bestSeverity returns the more severe of two severity values.
+func bestSeverity(a, b string) string {
+	order := map[string]int{"info": 0, "warning": 1, "major": 2, "critical": 3}
+	if order[b] > order[a] {
+		return b
+	}
+	return a
+}
+
+// bestUUID returns the first valid UUID, preferring a over b.
+func bestUUID(a, b pgtype.UUID) pgtype.UUID {
+	if a.Valid {
+		return a
+	}
+	return b
+}
+
 // computeDiff compares old and new incident rows and returns a map of changed fields.
 // Each entry has the shape { "old": ..., "new": ... }.
 func computeDiff(old, new IncidentRow) map[string]any {

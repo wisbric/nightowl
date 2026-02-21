@@ -42,6 +42,12 @@ type UpdateRequest struct {
 	RunbookID     *string  `json:"runbook_id" validate:"omitempty,uuid"`
 }
 
+// MergeRequest is the JSON body for POST /api/v1/incidents/:id/merge.
+// The URL :id is the target (surviving) incident; source_id is the incident being merged in.
+type MergeRequest struct {
+	SourceID string `json:"source_id" validate:"required,uuid"`
+}
+
 // ListFilters holds the optional filter parameters for listing incidents.
 type ListFilters struct {
 	Severity string
