@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--card-fg);
+  --color-muted: var(--muted-bg);
+  --color-muted-foreground: var(--muted-fg);
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-primary: var(--primary-bg);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--secondary-bg);
+  --color-secondary-foreground: var(--secondary-fg);
+  --color-accent: var(--accent-bg);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: #DC2626;
+  --color-destructive-foreground: #FFFFFF;
+  --color-popover: var(--card-bg);
+  --color-popover-foreground: var(--card-fg);
+
+  --color-severity-critical: #DC2626;
+  --color-severity-warning: #F59E0B;
+  --color-severity-info: #3B82F6;
+  --color-severity-ok: #10B981;
+
+  --color-status-firing: #DC2626;
+  --color-status-ack: #F59E0B;
+  --color-status-investigating: #8B5CF6;
+  --color-status-resolved: #10B981;
+  --color-status-suppressed: #6B7280;
+
+  --color-sidebar: #1E3A5F;
+  --color-sidebar-foreground: #E8EAED;
+  --color-sidebar-accent: #D97706;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+:root {
+  --bg: #FFFFFF;
+  --fg: #0F1117;
+  --card-bg: #F8F9FA;
+  --card-fg: #0F1117;
+  --muted-bg: #F1F3F5;
+  --muted-fg: #6B7280;
+  --border-color: #E5E7EB;
+  --input-color: #E5E7EB;
+  --ring-color: #D97706;
+  --primary-bg: #1E3A5F;
+  --primary-fg: #FFFFFF;
+  --secondary-bg: #374151;
+  --secondary-fg: #FFFFFF;
+  --accent-bg: #D97706;
+  --accent-fg: #FFFFFF;
+}
+
+.dark {
+  --bg: #0F1117;
+  --fg: #E8EAED;
+  --card-bg: #1A1D27;
+  --card-fg: #E8EAED;
+  --muted-bg: #252830;
+  --muted-fg: #9CA3AF;
+  --border-color: #2D3039;
+  --input-color: #2D3039;
+  --ring-color: #F59E0B;
+  --primary-bg: #1E3A5F;
+  --primary-fg: #FFFFFF;
+  --secondary-bg: #374151;
+  --secondary-fg: #FFFFFF;
+  --accent-bg: #D97706;
+  --accent-fg: #FFFFFF;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+* {
+  border-color: var(--color-border);
+}

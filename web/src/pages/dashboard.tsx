@@ -1,0 +1,157 @@
+import { useQuery } from "@tanstack/react-query";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { api } from "@/lib/api";
+import { useTitle } from "@/hooks/use-title";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { SeverityBadge } from "@/components/ui/severity-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Link } from "@tanstack/react-router";
+import { formatRelativeTime } from "@/lib/utils";
+import type { Alert, Incident, OnCallEntry } from "@/types/api";
+
+export function DashboardPage() {
+  useTitle("Dashboard");
+
+  const { data: alerts } = useQuery({
+    queryKey: ["alerts", "active"],
+    queryFn: () => api.get<Alert[]>("/alerts?status=firing&status=acknowledged&limit=100"),
+  });
+
+  const { data: incidents } = useQuery({
+    queryKey: ["incidents", "recent"],
+    queryFn: () => api.get<Incident[]>("/incidents?limit=5"),
+  });
+
+  const { data: oncall } = useQuery({
+    queryKey: ["rosters", "oncall"],
+    queryFn: () => api.get<OnCallEntry[]>("/rosters/on-call"),
+  });
+
+  const activeAlerts = alerts ?? [];
+  const criticalCount = activeAlerts.filter((a) => a.severity === "critical").length;
+  const warningCount = activeAlerts.filter((a) => a.severity === "warning" || a.severity === "major").length;
+  const infoCount = activeAlerts.filter((a) => a.severity === "info").length;
+
+  const severityData = [
+    { name: "Critical", count: criticalCount, fill: "#DC2626" },
+    { name: "Warning", count: warningCount, fill: "#F59E0B" },
+    { name: "Info", count: infoCount, fill: "#3B82F6" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Alerts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{activeAlerts.length}</div>
+            <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+              <span className="text-severity-critical">{criticalCount} critical</span>
+              <span className="text-severity-warning">{warningCount} warning</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Open Incidents</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{incidents?.length ?? 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">On-Call Now</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {oncall && oncall.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {oncall.map((e) => (
+                  <li key={e.roster_id} className="flex items-center gap-2">
+                    <span className="font-medium">{e.display_name}</span>
+                    <span className="text-muted-foreground text-xs">({e.roster_name})</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No on-call data</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Alerts by Severity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={severityData}>
+                  <XAxis dataKey="name" tick={{ fill: "var(--color-muted-foreground)" }} />
+                  <YAxis tick={{ fill: "var(--color-muted-foreground)" }} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", color: "var(--color-card-foreground)" }}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Alerts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activeAlerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active alerts</p>
+            ) : (
+              <ul className="space-y-2">
+                {activeAlerts.slice(0, 8).map((a) => (
+                  <li key={a.id}>
+                    <Link to="/alerts/$alertId" params={{ alertId: a.id }} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
+                      <SeverityBadge severity={a.severity} />
+                      <span className="flex-1 truncate font-mono text-sm">{a.title}</span>
+                      <StatusBadge status={a.status} />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(a.created_at)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {incidents && incidents.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Incidents</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {incidents.map((inc) => (
+                <li key={inc.id}>
+                  <Link to="/incidents/$incidentId" params={{ incidentId: inc.id }} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
+                    <SeverityBadge severity={inc.severity} />
+                    <span className="flex-1 truncate text-sm">{inc.title}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(inc.created_at)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
