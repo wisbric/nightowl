@@ -26,19 +26,21 @@ type NormalizedAlert struct {
 
 // Response is the API response for an alert.
 type Response struct {
-	ID              uuid.UUID       `json:"id"`
-	Fingerprint     string          `json:"fingerprint"`
-	Status          string          `json:"status"`
-	Severity        string          `json:"severity"`
-	Source          string          `json:"source"`
-	Title           string          `json:"title"`
-	Description     *string         `json:"description,omitempty"`
-	Labels          json.RawMessage `json:"labels"`
-	Annotations     json.RawMessage `json:"annotations"`
-	OccurrenceCount int32           `json:"occurrence_count"`
-	FirstFiredAt    time.Time       `json:"first_fired_at"`
-	LastFiredAt     time.Time       `json:"last_fired_at"`
-	CreatedAt       time.Time       `json:"created_at"`
+	ID                uuid.UUID       `json:"id"`
+	Fingerprint       string          `json:"fingerprint"`
+	Status            string          `json:"status"`
+	Severity          string          `json:"severity"`
+	Source            string          `json:"source"`
+	Title             string          `json:"title"`
+	Description       *string         `json:"description,omitempty"`
+	Labels            json.RawMessage `json:"labels"`
+	Annotations       json.RawMessage `json:"annotations"`
+	MatchedIncidentID *uuid.UUID      `json:"matched_incident_id,omitempty"`
+	SuggestedSolution *string         `json:"suggested_solution,omitempty"`
+	OccurrenceCount   int32           `json:"occurrence_count"`
+	FirstFiredAt      time.Time       `json:"first_fired_at"`
+	LastFiredAt       time.Time       `json:"last_fired_at"`
+	CreatedAt         time.Time       `json:"created_at"`
 }
 
 // BatchResponse is the response for webhook endpoints that process multiple alerts.

@@ -59,14 +59,15 @@ type genericPayload struct {
 
 // WebhookHandler provides HTTP handlers for alert webhook endpoints.
 type WebhookHandler struct {
-	logger *slog.Logger
-	audit  *audit.Writer
-	dedup  *Deduplicator
+	logger  *slog.Logger
+	audit   *audit.Writer
+	dedup   *Deduplicator
+	enrich  *Enricher
 }
 
 // NewWebhookHandler creates a WebhookHandler.
-func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator) *WebhookHandler {
-	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup}
+func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher) *WebhookHandler {
+	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich}
 }
 
 // Routes returns a chi.Router with webhook routes mounted.
@@ -119,6 +120,17 @@ func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized
 
 	if h.dedup != nil {
 		h.dedup.RecordNew(ctx, schema, normalized.Fingerprint, resp.ID)
+	}
+
+	// Enrich new alerts with knowledge base matches.
+	if h.enrich != nil && normalized.Status == "firing" {
+		result := h.enrich.Enrich(ctx, conn, resp.ID, normalized.Fingerprint, normalized.Title, normalized.Description)
+		if result.IsEnriched {
+			resp.MatchedIncidentID = &result.MatchedIncidentID
+			if result.SuggestedSolution != "" {
+				resp.SuggestedSolution = &result.SuggestedSolution
+			}
+		}
 	}
 
 	return resp, false, nil
