@@ -1,0 +1,14 @@
+apiVersion: v2
+name: nightowl
+description: NightOwl — 24/7 Operations Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Wisbric
+    url: https://wisbric.com
+keywords:
+  - incident-management
+  - on-call
+  - alert-management
+  - knowledge-base

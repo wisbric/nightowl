@@ -1,0 +1,138 @@
+# NightOwl Helm Chart Values
+
+replicaCount:
+  api: 2
+  worker: 1
+
+image:
+  repository: ghcr.io/wisbric/nightowl
+  pullPolicy: IfNotPresent
+  tag: ""  # defaults to appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# -- API server configuration
+api:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+
+# -- Worker configuration
+worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Application configuration (env vars)
+config:
+  logLevel: info
+  logFormat: json
+  corsAllowedOrigins: "*"
+  metricsPath: /metrics
+
+# -- External secrets (create Secret resource or reference existing)
+secrets:
+  create: true
+  # -- Name of existing secret to use (if create is false)
+  existingSecret: ""
+  databaseUrl: "postgres://nightowl:nightowl@nightowl-postgresql:5432/nightowl?sslmode=disable"
+  redisUrl: "redis://nightowl-redis:6379/0"
+  oidcIssuerUrl: ""
+  oidcClientId: ""
+  slackBotToken: ""
+  slackSigningSecret: ""
+  slackAlertChannel: ""
+
+# -- Service
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# -- Ingress
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: nightowl.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: nightowl-tls
+    #   hosts:
+    #     - nightowl.example.com
+
+# -- PostgreSQL (external by default)
+postgresql:
+  # -- Use CNPG operator for managed PostgreSQL
+  cnpg:
+    enabled: false
+    instances: 2
+    storage:
+      size: 10Gi
+      storageClass: ""
+  # -- External PostgreSQL (used when cnpg.enabled is false)
+  external:
+    host: ""
+    port: 5432
+    database: nightowl
+    username: nightowl
+    existingSecret: ""
+    existingSecretPasswordKey: password
+
+# -- Redis (external by default)
+redis:
+  # -- Deploy Redis via Bitnami subchart
+  enabled: false
+  # -- External Redis connection
+  external:
+    host: ""
+    port: 6379
+
+# -- Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+# -- PrometheusRule for self-monitoring alerts
+prometheusRule:
+  enabled: false
+  labels: {}
+
+# -- Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# -- Migrations (run as init container)
+migrations:
+  globalDir: /migrations/global
+  tenantDir: /migrations/tenant

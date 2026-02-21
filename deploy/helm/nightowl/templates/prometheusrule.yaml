@@ -1,0 +1,49 @@
+{{- if .Values.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "nightowl.fullname" . }}
+  labels:
+    {{- include "nightowl.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: nightowl.rules
+      rules:
+        - alert: NightOwlAPIHighErrorRate
+          expr: |
+            sum(rate(nightowl_api_request_duration_seconds_count{status=~"5.."}[5m]))
+            / sum(rate(nightowl_api_request_duration_seconds_count[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NightOwl API error rate above 5%"
+            description: "The NightOwl API is returning more than 5% server errors over the last 5 minutes."
+        - alert: NightOwlAPIDown
+          expr: up{job="{{ include "nightowl.fullname" . }}"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NightOwl API is down"
+            description: "NightOwl API has been unreachable for more than 2 minutes."
+        - alert: NightOwlEscalationBacklog
+          expr: nightowl_alerts_escalated_total == 0 and nightowl_alerts_received_total > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NightOwl escalation engine may be stalled"
+            description: "Alerts are being received but no escalations have occurred in the last 15 minutes."
+        - alert: NightOwlHighAlertVolume
+          expr: rate(nightowl_alerts_received_total[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High alert volume detected"
+            description: "NightOwl is receiving more than 10 alerts per second sustained for 10 minutes."
+{{- end }}
