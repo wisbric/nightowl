@@ -84,6 +84,24 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (DetailResponse, error)
 	}, nil
 }
 
+// ListHistory returns the change history for a single incident.
+// It verifies the incident exists before returning history entries.
+func (s *Service) ListHistory(ctx context.Context, id uuid.UUID) ([]HistoryEntry, error) {
+	// Verify the incident exists.
+	if _, err := s.store.Get(ctx, id); err != nil {
+		return nil, fmt.Errorf("getting incident: %w", err)
+	}
+
+	entries, err := s.store.ListHistory(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("listing history: %w", err)
+	}
+	if entries == nil {
+		entries = []HistoryEntry{}
+	}
+	return entries, nil
+}
+
 // List returns a paginated, filtered list of incidents.
 func (s *Service) List(ctx context.Context, filters ListFilters, limit, offset int) ([]Response, int, error) {
 	rows, err := s.store.ListFiltered(ctx, filters, limit, offset)

@@ -199,6 +199,20 @@ func TestDeleteIncident_InvalidID(t *testing.T) {
 	}
 }
 
+func TestListHistory_InvalidID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	r := httptest.NewRequest(http.MethodGet, "/incidents/not-a-uuid/history", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func TestSearch_MissingQuery(t *testing.T) {
 	h := NewHandler(nil)
 	router := chi.NewRouter()

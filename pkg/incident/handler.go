@@ -39,6 +39,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Put("/", h.handleUpdate)
 		r.Delete("/", h.handleDelete)
 		r.Post("/merge", h.handleMerge)
+		r.Get("/history", h.handleListHistory)
 	})
 	return r
 }
@@ -204,6 +205,28 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		"results": results,
 		"count":   len(results),
 	})
+}
+
+func (h *Handler) handleListHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid incident ID")
+		return
+	}
+
+	svc := h.service(r)
+	entries, err := svc.ListHistory(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpserver.RespondError(w, http.StatusNotFound, "not_found", "incident not found")
+			return
+		}
+		h.logger.Error("listing incident history", "error", err, "id", id)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to list incident history")
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, entries)
 }
 
 func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
