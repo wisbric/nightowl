@@ -45,7 +45,7 @@ func TestCreateRunbook_Validation(t *testing.T) {
 		},
 	}
 
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/runbooks", h.Routes())
 
@@ -65,7 +65,7 @@ func TestCreateRunbook_Validation(t *testing.T) {
 }
 
 func TestGetRunbook_InvalidID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/runbooks", h.Routes())
 
@@ -79,7 +79,7 @@ func TestGetRunbook_InvalidID(t *testing.T) {
 }
 
 func TestUpdateRunbook_Validation(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/runbooks", h.Routes())
 
@@ -116,7 +116,7 @@ func TestUpdateRunbook_Validation(t *testing.T) {
 }
 
 func TestDeleteRunbook_InvalidID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/runbooks", h.Routes())
 

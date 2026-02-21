@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/wisbric/opswatch/internal/audit"
 	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/internal/config"
 	"github.com/wisbric/opswatch/internal/httpserver"
@@ -99,14 +100,22 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		logger.Info("OIDC authentication disabled (OIDC_ISSUER_URL not set)")
 	}
 
+	// Audit log writer (async, buffered).
+	auditWriter := audit.NewWriter(db, logger)
+	auditWriter.Start(ctx)
+	defer auditWriter.Close()
+
 	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, oidcAuth)
 
 	// Mount domain handlers.
-	incidentHandler := incident.NewHandler(logger)
+	incidentHandler := incident.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/incidents", incidentHandler.Routes())
 
-	runbookHandler := runbook.NewHandler(logger)
+	runbookHandler := runbook.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/runbooks", runbookHandler.Routes())
+
+	auditHandler := audit.NewHandler(logger)
+	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),

@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/wisbric/opswatch/internal/audit"
 	"github.com/wisbric/opswatch/internal/auth"
 	"github.com/wisbric/opswatch/internal/httpserver"
 	"github.com/wisbric/opswatch/pkg/tenant"
@@ -20,11 +22,12 @@ import (
 // Handler provides HTTP handlers for the incidents API.
 type Handler struct {
 	logger *slog.Logger
+	audit  *audit.Writer
 }
 
 // NewHandler creates an incident Handler.
-func NewHandler(logger *slog.Logger) *Handler {
-	return &Handler{logger: logger}
+func NewHandler(logger *slog.Logger, audit *audit.Writer) *Handler {
+	return &Handler{logger: logger, audit: audit}
 }
 
 // Routes returns a chi.Router with all incident routes mounted.
@@ -71,6 +74,11 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("creating incident", "error", err)
 		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to create incident")
 		return
+	}
+
+	if h.audit != nil {
+		detail, _ := json.Marshal(map[string]string{"title": resp.Title})
+		h.audit.LogFromRequest(r, "create", "incident", resp.ID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusCreated, resp)
@@ -148,6 +156,11 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.audit != nil {
+		detail, _ := json.Marshal(map[string]string{"title": resp.Title})
+		h.audit.LogFromRequest(r, "update", "incident", resp.ID, detail)
+	}
+
 	httpserver.Respond(w, http.StatusOK, resp)
 }
 
@@ -167,6 +180,10 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("deleting incident", "error", err, "id", id)
 		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to delete incident")
 		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogFromRequest(r, "delete", "incident", id, nil)
 	}
 
 	httpserver.Respond(w, http.StatusNoContent, nil)
@@ -263,6 +280,11 @@ func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("merging incidents", "error", err, "target", targetID, "source", sourceID)
 		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to merge incidents")
 		return
+	}
+
+	if h.audit != nil {
+		detail, _ := json.Marshal(map[string]string{"source_id": sourceID.String(), "target_id": targetID.String()})
+		h.audit.LogFromRequest(r, "merge", "incident", targetID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusOK, resp)

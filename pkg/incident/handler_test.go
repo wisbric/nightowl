@@ -115,7 +115,7 @@ func TestCreateIncident_Validation(t *testing.T) {
 		},
 	}
 
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -135,7 +135,7 @@ func TestCreateIncident_Validation(t *testing.T) {
 }
 
 func TestGetIncident_InvalidID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -149,7 +149,7 @@ func TestGetIncident_InvalidID(t *testing.T) {
 }
 
 func TestUpdateIncident_Validation(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -186,7 +186,7 @@ func TestUpdateIncident_Validation(t *testing.T) {
 }
 
 func TestDeleteIncident_InvalidID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -200,7 +200,7 @@ func TestDeleteIncident_InvalidID(t *testing.T) {
 }
 
 func TestListHistory_InvalidID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -214,7 +214,7 @@ func TestListHistory_InvalidID(t *testing.T) {
 }
 
 func TestSearch_MissingQuery(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -228,7 +228,7 @@ func TestSearch_MissingQuery(t *testing.T) {
 }
 
 func TestSearch_InvalidLimit(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -255,7 +255,7 @@ func TestSearch_InvalidLimit(t *testing.T) {
 }
 
 func TestFingerprint_EmptyFP(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -376,7 +376,7 @@ func TestEnsureSlice(t *testing.T) {
 }
 
 func TestMerge_InvalidTargetID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -392,7 +392,7 @@ func TestMerge_InvalidTargetID(t *testing.T) {
 }
 
 func TestMerge_MissingSourceID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
@@ -409,7 +409,7 @@ func TestMerge_MissingSourceID(t *testing.T) {
 }
 
 func TestMerge_InvalidSourceID(t *testing.T) {
-	h := NewHandler(nil)
+	h := NewHandler(nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/incidents", h.Routes())
 
