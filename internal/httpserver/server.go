@@ -13,9 +13,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/wisbric/opswatch/internal/auth"
-	"github.com/wisbric/opswatch/internal/config"
-	"github.com/wisbric/opswatch/pkg/tenant"
+	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/nightowl/internal/config"
+	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
 // Server holds the HTTP server dependencies.

@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/opswatch/internal/db"
-	"github.com/wisbric/opswatch/internal/platform"
+	"github.com/wisbric/nightowl/internal/db"
+	"github.com/wisbric/nightowl/internal/platform"
 )
 
 // slugPattern restricts tenant slugs to safe identifiers for schema names.

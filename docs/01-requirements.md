@@ -1,4 +1,4 @@
-# OpsWatch — Product Requirements
+# NightOwl — Product Requirements
 
 > Incident Knowledge Base, Alert Management, On-Call Roster & Escalation Platform for 24/7 Operations
 
@@ -63,8 +63,8 @@ Current tooling is fragmented: PagerDuty/Opsgenie are SaaS (data sovereignty iss
 |----|-------------|----------|
 | SL-01 | Post critical/major alerts to configurable Slack channels | Must |
 | SL-02 | Interactive Slack messages: acknowledge, escalate, resolve from Slack | Must |
-| SL-03 | Slack command: `/opswatch search <query>` to search knowledge base | Must |
-| SL-04 | Slack command: `/opswatch oncall` to show current on-call roster | Must |
+| SL-03 | Slack command: `/nightowl search <query>` to search knowledge base | Must |
+| SL-04 | Slack command: `/nightowl oncall` to show current on-call roster | Must |
 | SL-05 | Post incident resolution summaries to Slack with link to add/edit solution | Must |
 | SL-06 | Thread-based incident updates — all updates to an incident in one Slack thread | Should |
 | SL-07 | Configurable per-tenant Slack workspaces | Must |
@@ -116,7 +116,7 @@ Current tooling is fragmented: PagerDuty/Opsgenie are SaaS (data sovereignty iss
 - Native mobile app (web responsive is sufficient)
 - Video/voice conferencing (use existing tools)
 - Full ITSM ticketing (this is incident-focused, not a ServiceNow replacement)
-- AI auto-remediation engine (agents can report their actions, but OpsWatch doesn't execute remediations)
+- AI auto-remediation engine (agents can report their actions, but NightOwl doesn't execute remediations)
 - ChatOps beyond Slack (Teams, Discord, etc. are future)
 
 ## 6. Success Metrics

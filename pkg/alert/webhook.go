@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/wisbric/opswatch/internal/audit"
-	"github.com/wisbric/opswatch/internal/httpserver"
-	"github.com/wisbric/opswatch/pkg/tenant"
+	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
 // --- Alertmanager payload types ---

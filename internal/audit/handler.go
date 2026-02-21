@@ -6,9 +6,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/wisbric/opswatch/internal/db"
-	"github.com/wisbric/opswatch/internal/httpserver"
-	"github.com/wisbric/opswatch/pkg/tenant"
+	"github.com/wisbric/nightowl/internal/db"
+	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
 // Handler provides HTTP handlers for the audit log API.

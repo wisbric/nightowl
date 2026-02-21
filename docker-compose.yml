@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: opswatch
-      POSTGRES_PASSWORD: opswatch
-      POSTGRES_DB: opswatch
+      POSTGRES_USER: nightowl
+      POSTGRES_PASSWORD: nightowl
+      POSTGRES_DB: nightowl
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opswatch"]
+      test: ["CMD-SHELL", "pg_isready -U nightowl"]
       interval: 5s
       timeout: 3s
       retries: 5

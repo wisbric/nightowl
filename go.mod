@@ -1,4 +1,4 @@
-module github.com/wisbric/opswatch
+module github.com/wisbric/nightowl
 
 go 1.24.0
 

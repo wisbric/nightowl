@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 const (

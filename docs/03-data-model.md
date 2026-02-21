@@ -1,4 +1,4 @@
-# OpsWatch — Data Model Specification
+# NightOwl — Data Model Specification
 
 ## 1. Schema Strategy
 

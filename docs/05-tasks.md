@@ -1,9 +1,9 @@
-# OpsWatch — Implementation Tasks
+# NightOwl — Implementation Tasks
 
 ## Phase 1: Foundation (Weeks 1–2)
 
 ### 1.1 Project Scaffolding
-- [ ] Initialize Go module (`github.com/wisbric/opswatch`)
+- [ ] Initialize Go module (`github.com/wisbric/nightowl`)
 - [ ] Set up project structure per architecture spec (`pkg/`, `cmd/`, `internal/`, `migrations/`)
 - [ ] Configure `sqlc` with PostgreSQL schema
 - [ ] Set up `golang-migrate` migration framework
@@ -29,7 +29,7 @@
 - [ ] Structured JSON error responses
 - [ ] Request validation (Go struct tags or manual)
 - [ ] Pagination helper (cursor-based for alerts, offset for KB)
-- [ ] Prometheus metrics middleware (`opswatch_api_request_duration_seconds`)
+- [ ] Prometheus metrics middleware (`nightowl_api_request_duration_seconds`)
 
 ---
 
@@ -81,7 +81,7 @@
 - [ ] Redis-based dedup: fingerprint → alert_id with TTL
 - [ ] On duplicate: increment occurrence_count, update last_fired_at
 - [ ] DB fallback if Redis unavailable
-- [ ] Metric: `opswatch_alerts_deduplicated_total`
+- [ ] Metric: `nightowl_alerts_deduplicated_total`
 
 ### 3.3 Knowledge Base Enrichment
 - [ ] On new alert: fingerprint lookup in incidents table
@@ -97,12 +97,12 @@
 ### 3.5 Agent Integration
 - [ ] Parse `agent_metadata` from generic webhook
 - [ ] If auto_resolved: create alert in resolved state, auto-create KB entry
-- [ ] Metric: `opswatch_alerts_agent_resolved_total`
+- [ ] Metric: `nightowl_alerts_agent_resolved_total`
 
 ### 3.6 Alert Metrics
-- [ ] `opswatch_alerts_received_total{source, severity}`
-- [ ] `opswatch_alert_processing_duration_seconds{source}`
-- [ ] `opswatch_kb_hits_total` (enrichment success)
+- [ ] `nightowl_alerts_received_total{source, severity}`
+- [ ] `nightowl_alert_processing_duration_seconds{source}`
+- [ ] `nightowl_kb_hits_total` (enrichment success)
 
 ---
 
@@ -134,7 +134,7 @@
 - [ ] State machine: alert created → tier 1 notified → timeout → tier 2 → ...
 - [ ] Redis pub/sub: receive acknowledgment events from API server
 - [ ] Persist escalation_events for audit trail
-- [ ] Metric: `opswatch_alerts_escalated_total{tier}`
+- [ ] Metric: `nightowl_alerts_escalated_total{tier}`
 
 ### 4.5 Callout (Twilio)
 - [ ] Twilio REST API integration: make calls, send SMS
@@ -172,11 +172,11 @@
 - [ ] Thread-based updates: follow-up to original alert message
 
 ### 5.3 Slash Commands
-- [ ] `/opswatch search <query>` — KB search, top 3 results
-- [ ] `/opswatch oncall [roster]` — current on-call display
-- [ ] `/opswatch ack <alert-id>` — acknowledge from Slack
-- [ ] `/opswatch resolve <alert-id> [notes]` — resolve with notes
-- [ ] `/opswatch roster [name]` — upcoming schedule
+- [ ] `/nightowl search <query>` — KB search, top 3 results
+- [ ] `/nightowl oncall [roster]` — current on-call display
+- [ ] `/nightowl ack <alert-id>` — acknowledge from Slack
+- [ ] `/nightowl resolve <alert-id> [notes]` — resolve with notes
+- [ ] `/nightowl roster [name]` — upcoming schedule
 
 ### 5.4 Interactive Flows
 - [ ] "Add to Knowledge Base" modal: pre-filled from alert data
@@ -264,5 +264,5 @@
 ### 7.4 Observability
 - [ ] Structured logging with `slog` (JSON output)
 - [ ] OpenTelemetry trace export to SigNoz
-- [ ] Grafana dashboard JSON for OpsWatch metrics
-- [ ] Alert rules: OpsWatch itself (API errors, escalation failures, Slack delivery failures)
+- [ ] Grafana dashboard JSON for NightOwl metrics
+- [ ] Alert rules: NightOwl itself (API errors, escalation failures, Slack delivery failures)

@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/opswatch/internal/auth"
-	"github.com/wisbric/opswatch/internal/db"
-	"github.com/wisbric/opswatch/pkg/tenant"
+	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/nightowl/internal/db"
+	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
 // Entry represents a single audit log entry to be written.

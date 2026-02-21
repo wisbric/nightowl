@@ -9,12 +9,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/wisbric/opswatch/internal/app"
-	"github.com/wisbric/opswatch/internal/config"
+	"github.com/wisbric/nightowl/internal/app"
+	"github.com/wisbric/nightowl/internal/config"
 )
 
 func main() {
-	mode := flag.String("mode", "", "run mode: api or worker (overrides OPSWATCH_MODE)")
+	mode := flag.String("mode", "", "run mode: api or worker (overrides NIGHTOWL_MODE)")
 	flag.Parse()
 
 	cfg, err := config.Load()

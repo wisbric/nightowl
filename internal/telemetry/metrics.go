@@ -8,7 +8,7 @@ import (
 // HTTPRequestDuration tracks HTTP request latency.
 var HTTPRequestDuration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
-		Namespace: "opswatch",
+		Namespace: "nightowl",
 		Subsystem: "api",
 		Name:      "request_duration_seconds",
 		Help:      "HTTP request duration in seconds.",
@@ -20,7 +20,7 @@ var HTTPRequestDuration = prometheus.NewHistogramVec(
 // AlertsDeduplicatedTotal counts the number of deduplicated alerts.
 var AlertsDeduplicatedTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
-		Namespace: "opswatch",
+		Namespace: "nightowl",
 		Subsystem: "alerts",
 		Name:      "deduplicated_total",
 		Help:      "Total number of deduplicated alerts.",

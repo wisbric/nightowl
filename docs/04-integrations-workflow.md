@@ -1,10 +1,10 @@
-# OpsWatch — Integrations & Workflow Specification
+# NightOwl — Integrations & Workflow Specification
 
 ## 1. Slack Integration
 
 ### 1.1 Slack App Configuration
 
-OpsWatch operates as a Slack App (not a legacy bot) with the following scopes:
+NightOwl operates as a Slack App (not a legacy bot) with the following scopes:
 
 **Bot Token Scopes:**
 - `chat:write` — post messages to channels
@@ -12,36 +12,36 @@ OpsWatch operates as a Slack App (not a legacy bot) with the following scopes:
 - `commands` — receive slash commands
 - `im:write` — send DMs to on-call engineers
 - `users:read` — resolve Slack user IDs to display names
-- `users:read.email` — match Slack users to OpsWatch users
+- `users:read.email` — match Slack users to NightOwl users
 
 **Event Subscriptions:**
 - `message.im` — receive DMs (for quick incident logging)
-- `app_mention` — respond when @OpsWatch is mentioned
+- `app_mention` — respond when @NightOwl is mentioned
 
 **Interactivity:**
-- Request URL: `https://opswatch.example.com/api/v1/slack/interactions`
-- Slash commands URL: `https://opswatch.example.com/api/v1/slack/commands`
+- Request URL: `https://nightowl.example.com/api/v1/slack/interactions`
+- Slash commands URL: `https://nightowl.example.com/api/v1/slack/commands`
 
 ### 1.2 Slash Commands
 
 ```
-/opswatch search <query>
+/nightowl search <query>
   → Searches knowledge base, returns top 3 results as Slack blocks
   → Each result has: title, severity, solution preview, "View Full" button
 
-/opswatch oncall [roster-name]
+/nightowl oncall [roster-name]
   → Shows current on-call for specified roster (or all rosters if omitted)
   → Includes: name, timezone, local time, shift end time
 
-/opswatch ack <alert-id>
+/nightowl ack <alert-id>
   → Acknowledge an alert from Slack
   → Confirms with ephemeral message
 
-/opswatch resolve <alert-id> [notes]
+/nightowl resolve <alert-id> [notes]
   → Resolve an alert with optional notes
   → Prompts to add to knowledge base if new issue
 
-/opswatch roster [roster-name]
+/nightowl roster [roster-name]
   → Shows upcoming rotation schedule (next 7 days)
   → Includes overrides
 ```
@@ -75,7 +75,7 @@ OpsWatch operates as a Slack App (not a legacy bot) with the following scopes:
       "type": "actions",
       "elements": [
         { "type": "button", "text": { "type": "plain_text", "text": "✅ Acknowledge" }, "action_id": "ack_alert", "value": "alert_uuid" },
-        { "type": "button", "text": { "type": "plain_text", "text": "📋 View Runbook" }, "action_id": "view_runbook", "url": "https://opswatch.example.com/runbooks/xyz" },
+        { "type": "button", "text": { "type": "plain_text", "text": "📋 View Runbook" }, "action_id": "view_runbook", "url": "https://nightowl.example.com/runbooks/xyz" },
         { "type": "button", "text": { "type": "plain_text", "text": "🔼 Escalate" }, "action_id": "escalate_alert", "value": "alert_uuid", "style": "danger" }
       ]
     }
@@ -134,7 +134,7 @@ Body: Standard Alertmanager webhook payload
   "version": "4",
   "groupKey": "...",
   "status": "firing",
-  "receiver": "opswatch",
+  "receiver": "nightowl",
   "alerts": [
     {
       "status": "firing",
@@ -225,7 +225,7 @@ Agents (automated remediation systems) use the generic webhook with additional f
 }
 ```
 
-If `agent_metadata.auto_resolved` is true, OpsWatch:
+If `agent_metadata.auto_resolved` is true, NightOwl:
 1. Creates the alert in resolved state
 2. Auto-creates a KB entry with the agent's action as the solution
 3. Posts a summary to Slack (informational, no escalation)
@@ -260,7 +260,7 @@ Escalation engine triggers phone callout
 Used as supplementary notification alongside phone calls:
 
 ```
-"[OpsWatch] CRITICAL: PodCrashLoopBackOff in production-de-01/customer-api. 
+"[NightOwl] CRITICAL: PodCrashLoopBackOff in production-de-01/customer-api. 
 Reply ACK to acknowledge or ESC to escalate. Alert ID: abc123"
 ```
 
@@ -328,7 +328,7 @@ At each handoff time, the worker process sends:
 When grouped alerts indicate a major incident:
 
 1. Engineer clicks "Promote to Incident" in UI or Slack
-2. OpsWatch creates an incident record linked to all related alerts
+2. NightOwl creates an incident record linked to all related alerts
 3. A Slack thread is created as the incident war room
 4. Escalation policy triggers if configured
 5. All future updates to related alerts post to the incident thread
@@ -336,7 +336,7 @@ When grouped alerts indicate a major incident:
 
 ## 6. Data Retention
 
-Handled by `opswatch-cleanup` CronJob running daily:
+Handled by `nightowl-cleanup` CronJob running daily:
 
 ```
 For each tenant:

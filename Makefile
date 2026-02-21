@@ -1,10 +1,10 @@
 .PHONY: build test test-integration lint fmt sqlc migrate-up migrate-down docker clean check seed
 
-BIN := bin/opswatch
-DATABASE_URL ?= postgres://opswatch:opswatch@localhost:5432/opswatch?sslmode=disable
+BIN := bin/nightowl
+DATABASE_URL ?= postgres://nightowl:nightowl@localhost:5432/nightowl?sslmode=disable
 
 build:
-	go build -trimpath -o $(BIN) ./cmd/opswatch
+	go build -trimpath -o $(BIN) ./cmd/nightowl
 
 test:
 	go test -race -count=1 ./...
@@ -16,7 +16,7 @@ lint:
 	golangci-lint run ./...
 
 fmt:
-	goimports -w -local github.com/wisbric/opswatch .
+	goimports -w -local github.com/wisbric/nightowl .
 	gofmt -s -w .
 
 sqlc:
@@ -29,10 +29,10 @@ migrate-down:
 	migrate -database "$(DATABASE_URL)" -path migrations/global down
 
 docker:
-	docker build -t opswatch:dev .
+	docker build -t nightowl:dev .
 
 seed:
-	go run ./cmd/opswatch -mode seed
+	go run ./cmd/nightowl -mode seed
 
 clean:
 	rm -rf bin/ coverage.out internal/db/

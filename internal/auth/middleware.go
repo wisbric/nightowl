@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 // Middleware returns an HTTP middleware that authenticates the caller via

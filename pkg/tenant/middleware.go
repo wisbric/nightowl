@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 // Resolver identifies the tenant for the current request.

@@ -1,13 +1,13 @@
-# OpsWatch — Architecture Specification
+# NightOwl — Architecture Specification
 
 ## 1. System Overview
 
-OpsWatch is a monolithic API with a React frontend, deployed as a single Helm chart on Kubernetes. It avoids microservice complexity while maintaining clean internal domain boundaries.
+NightOwl is a monolithic API with a React frontend, deployed as a single Helm chart on Kubernetes. It avoids microservice complexity while maintaining clean internal domain boundaries.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        Ingress (TLS)                             │
-│                     opswatch.example.com                         │
+│                     nightowl.example.com                         │
 ├──────────────────┬───────────────────────────────────────────────┤
 │   Frontend SPA   │              API Server                       │
 │   (React/Vite)   │         (Go or Python/FastAPI)                │
@@ -267,18 +267,18 @@ The `public` schema holds only:
 
 ```yaml
 # Single Helm chart produces:
-Deployment:  opswatch-api      (2+ replicas, stateless)
-Deployment:  opswatch-worker   (1+ replicas, escalation timers, background jobs)
-StatefulSet: opswatch-postgres (or use CNPG operator / external)
-Deployment:  opswatch-redis    (or use external)
-CronJob:     opswatch-cleanup  (data retention enforcement)
-ConfigMap:   opswatch-config
-Secret:      opswatch-secrets  (DB creds, Slack tokens, Twilio keys, API keys)
-Ingress:     opswatch          (TLS via cert-manager)
-Service:     opswatch-api
-Service:     opswatch-postgres
-Service:     opswatch-redis
-ServiceMonitor: opswatch       (Prometheus scraping)
+Deployment:  nightowl-api      (2+ replicas, stateless)
+Deployment:  nightowl-worker   (1+ replicas, escalation timers, background jobs)
+StatefulSet: nightowl-postgres (or use CNPG operator / external)
+Deployment:  nightowl-redis    (or use external)
+CronJob:     nightowl-cleanup  (data retention enforcement)
+ConfigMap:   nightowl-config
+Secret:      nightowl-secrets  (DB creds, Slack tokens, Twilio keys, API keys)
+Ingress:     nightowl          (TLS via cert-manager)
+Service:     nightowl-api
+Service:     nightowl-postgres
+Service:     nightowl-redis
+ServiceMonitor: nightowl       (Prometheus scraping)
 ```
 
 ### 7.2 Worker Process
@@ -373,17 +373,17 @@ GET    /metrics                           # Prometheus metrics
 ### 9.1 Metrics (Prometheus)
 
 ```
-opswatch_alerts_received_total{source, severity, tenant}
-opswatch_alerts_deduplicated_total{tenant}
-opswatch_alerts_acknowledged_total{tenant}
-opswatch_alerts_escalated_total{tenant, tier}
-opswatch_alert_processing_duration_seconds{source}
-opswatch_kb_searches_total{tenant, type}  # fingerprint vs text
-opswatch_kb_search_duration_seconds{}
-opswatch_kb_hits_total{tenant}            # search returned results
-opswatch_escalation_response_time_seconds{tenant, tier}
-opswatch_slack_notifications_total{tenant, type}
-opswatch_api_request_duration_seconds{method, path, status}
+nightowl_alerts_received_total{source, severity, tenant}
+nightowl_alerts_deduplicated_total{tenant}
+nightowl_alerts_acknowledged_total{tenant}
+nightowl_alerts_escalated_total{tenant, tier}
+nightowl_alert_processing_duration_seconds{source}
+nightowl_kb_searches_total{tenant, type}  # fingerprint vs text
+nightowl_kb_search_duration_seconds{}
+nightowl_kb_hits_total{tenant}            # search returned results
+nightowl_escalation_response_time_seconds{tenant, tier}
+nightowl_slack_notifications_total{tenant, type}
+nightowl_api_request_duration_seconds{method, path, status}
 ```
 
 ### 9.2 Logging

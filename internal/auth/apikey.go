@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 // APIKeyAuthenticator validates API keys against the database.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/wisbric/opswatch/internal/telemetry"
+	"github.com/wisbric/nightowl/internal/telemetry"
 )
 
 type contextKey string

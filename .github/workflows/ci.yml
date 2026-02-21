@@ -30,13 +30,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: opswatch
-          POSTGRES_PASSWORD: opswatch
-          POSTGRES_DB: opswatch
+          POSTGRES_USER: nightowl
+          POSTGRES_PASSWORD: nightowl
+          POSTGRES_DB: nightowl
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U opswatch"
+          --health-cmd "pg_isready -U nightowl"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 5
@@ -50,7 +50,7 @@ jobs:
           --health-timeout 3s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://opswatch:opswatch@localhost:5432/opswatch?sslmode=disable
+      DATABASE_URL: postgres://nightowl:nightowl@localhost:5432/nightowl?sslmode=disable
       REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
@@ -72,9 +72,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
-      - run: go build -trimpath -o bin/opswatch ./cmd/opswatch
+      - run: go build -trimpath -o bin/nightowl ./cmd/nightowl
       - name: Docker build
-        run: docker build -t opswatch:ci .
+        run: docker build -t nightowl:ci .
 
   sqlc-check:
     name: sqlc Check

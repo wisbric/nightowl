@@ -1,8 +1,8 @@
-# CLAUDE.md — OpsWatch
+# CLAUDE.md — NightOwl
 
 ## Project Overview
 
-OpsWatch is an incident knowledge base, alert management, on-call roster, and escalation platform for 24/7 operations teams. It is designed for managed service providers running Kubernetes infrastructure across multiple time zones.
+NightOwl is an incident knowledge base, alert management, on-call roster, and escalation platform for 24/7 operations teams. It is designed for managed service providers running Kubernetes infrastructure across multiple time zones.
 
 ## Specifications
 

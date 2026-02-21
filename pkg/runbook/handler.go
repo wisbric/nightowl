@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/wisbric/opswatch/internal/audit"
-	"github.com/wisbric/opswatch/internal/auth"
-	"github.com/wisbric/opswatch/internal/httpserver"
-	"github.com/wisbric/opswatch/pkg/tenant"
+	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
 // Handler provides HTTP handlers for the runbooks API.

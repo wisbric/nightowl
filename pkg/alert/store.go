@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/wisbric/opswatch/internal/db"
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 // Store provides database operations for alerts.

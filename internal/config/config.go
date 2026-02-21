@@ -9,14 +9,14 @@ import (
 // Config holds all application configuration, loaded from environment variables.
 type Config struct {
 	// Mode selects the runtime mode: "api" or "worker".
-	Mode string `env:"OPSWATCH_MODE" envDefault:"api"`
+	Mode string `env:"NIGHTOWL_MODE" envDefault:"api"`
 
 	// Server
-	Host string `env:"OPSWATCH_HOST" envDefault:"0.0.0.0"`
-	Port int    `env:"OPSWATCH_PORT" envDefault:"8080"`
+	Host string `env:"NIGHTOWL_HOST" envDefault:"0.0.0.0"`
+	Port int    `env:"NIGHTOWL_PORT" envDefault:"8080"`
 
 	// Database
-	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://opswatch:opswatch@localhost:5432/opswatch?sslmode=disable"`
+	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://nightowl:nightowl@localhost:5432/nightowl?sslmode=disable"`
 
 	// Redis
 	RedisURL string `env:"REDIS_URL" envDefault:"redis://localhost:6379/0"`

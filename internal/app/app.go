@@ -12,16 +12,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/wisbric/opswatch/internal/audit"
-	"github.com/wisbric/opswatch/internal/auth"
-	"github.com/wisbric/opswatch/internal/config"
-	"github.com/wisbric/opswatch/internal/httpserver"
-	"github.com/wisbric/opswatch/internal/platform"
-	"github.com/wisbric/opswatch/internal/seed"
-	"github.com/wisbric/opswatch/internal/telemetry"
-	"github.com/wisbric/opswatch/pkg/alert"
-	"github.com/wisbric/opswatch/pkg/incident"
-	"github.com/wisbric/opswatch/pkg/runbook"
+	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/nightowl/internal/config"
+	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/nightowl/internal/platform"
+	"github.com/wisbric/nightowl/internal/seed"
+	"github.com/wisbric/nightowl/internal/telemetry"
+	"github.com/wisbric/nightowl/pkg/alert"
+	"github.com/wisbric/nightowl/pkg/incident"
+	"github.com/wisbric/nightowl/pkg/runbook"
 )
 
 // Run is the main application entry point. It reads config, connects to
@@ -30,13 +30,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	logger := telemetry.NewLogger(cfg.LogFormat, cfg.LogLevel)
 	slog.SetDefault(logger)
 
-	logger.Info("starting opswatch",
+	logger.Info("starting nightowl",
 		"mode", cfg.Mode,
 		"listen", cfg.ListenAddr(),
 	)
 
 	// Tracing
-	shutdownTracer, err := telemetry.InitTracer(ctx, cfg.OTLPEndpoint, "opswatch", "0.1.0")
+	shutdownTracer, err := telemetry.InitTracer(ctx, cfg.OTLPEndpoint, "nightowl", "0.1.0")
 	if err != nil {
 		return fmt.Errorf("initializing tracer: %w", err)
 	}
