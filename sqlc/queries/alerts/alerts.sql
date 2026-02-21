@@ -46,3 +46,14 @@ SET status = 'resolved', resolved_at = now(), resolved_by_agent = true,
     agent_resolution_notes = $2, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: ListPendingEscalationAlerts :many
+SELECT * FROM alerts
+WHERE status = 'firing'
+  AND escalation_policy_id IS NOT NULL
+ORDER BY created_at ASC;
+
+-- name: UpdateAlertEscalationTier :exec
+UPDATE alerts
+SET current_escalation_tier = $2, updated_at = now()
+WHERE id = $1;

@@ -69,6 +69,17 @@ var KBHitsTotal = prometheus.NewCounter(
 	},
 )
 
+// AlertsEscalatedTotal counts alerts escalated per tier.
+var AlertsEscalatedTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "nightowl",
+		Subsystem: "alerts",
+		Name:      "escalated_total",
+		Help:      "Total number of alerts escalated by tier.",
+	},
+	[]string{"tier"},
+)
+
 // NewMetricsRegistry creates a Prometheus registry with default and custom collectors.
 func NewMetricsRegistry() *prometheus.Registry {
 	reg := prometheus.NewRegistry()
@@ -81,6 +92,7 @@ func NewMetricsRegistry() *prometheus.Registry {
 		AlertsReceivedTotal,
 		AlertProcessingDuration,
 		KBHitsTotal,
+		AlertsEscalatedTotal,
 	)
 	return reg
 }

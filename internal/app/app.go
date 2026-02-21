@@ -20,7 +20,10 @@ import (
 	"github.com/wisbric/nightowl/internal/seed"
 	"github.com/wisbric/nightowl/internal/telemetry"
 	"github.com/wisbric/nightowl/pkg/alert"
+	"github.com/wisbric/nightowl/pkg/escalation"
 	"github.com/wisbric/nightowl/pkg/incident"
+	"github.com/wisbric/nightowl/pkg/integration"
+	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
 )
 
@@ -79,7 +82,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	case "api":
 		return runAPI(ctx, cfg, logger, db, rdb, metricsReg)
 	case "worker":
-		return runWorker(ctx, logger)
+		return runWorker(ctx, logger, db, rdb, metricsReg)
 	case "seed":
 		return seed.Run(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
 	default:
@@ -129,6 +132,15 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics)
 	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
 
+	rosterHandler := roster.NewHandler(logger, auditWriter)
+	srv.APIRouter.Mount("/rosters", rosterHandler.Routes())
+
+	escalationHandler := escalation.NewHandler(logger, auditWriter)
+	srv.APIRouter.Mount("/escalation-policies", escalationHandler.Routes())
+
+	twilioHandler := integration.NewTwilioHandler(logger)
+	srv.APIRouter.Mount("/twilio", twilioHandler.Routes())
+
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
 
@@ -160,10 +172,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	}
 }
 
-func runWorker(ctx context.Context, logger *slog.Logger) error {
+func runWorker(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry) error {
 	logger.Info("worker started")
-	// Worker loop — placeholder for escalation engine, handoff notifications, etc.
-	<-ctx.Done()
-	logger.Info("worker stopped")
-	return nil
+
+	engine := escalation.NewEngine(pool, rdb, logger, telemetry.AlertsEscalatedTotal)
+	return engine.Run(ctx)
 }
