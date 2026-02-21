@@ -33,6 +33,9 @@ type Config struct {
 	MigrationsGlobalDir string `env:"MIGRATIONS_GLOBAL_DIR" envDefault:"migrations/global"`
 	MigrationsTenantDir string `env:"MIGRATIONS_TENANT_DIR" envDefault:"migrations/tenant"`
 
+	// CORS
+	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envDefault:"*" envSeparator:","`
+
 	// OIDC (optional — if not set, JWT authentication is disabled)
 	OIDCIssuerURL string `env:"OIDC_ISSUER_URL"`
 	OIDCClientID  string `env:"OIDC_CLIENT_ID"`

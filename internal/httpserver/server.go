@@ -7,12 +7,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/wisbric/opswatch/internal/auth"
+	"github.com/wisbric/opswatch/internal/config"
 	"github.com/wisbric/opswatch/pkg/tenant"
 )
 
@@ -27,7 +29,7 @@ type Server struct {
 
 // NewServer creates an HTTP server with middleware and health/metrics endpoints.
 // oidcAuth may be nil when OIDC is not configured (JWT auth will be unavailable).
-func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
+func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
 	s := &Server{
 		Router:  chi.NewRouter(),
 		Logger:  logger,
@@ -41,6 +43,14 @@ func NewServer(logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metrics
 	s.Router.Use(Logger(logger))
 	s.Router.Use(Metrics)
 	s.Router.Use(middleware.Recoverer)
+	s.Router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Tenant-Slug"},
+		ExposedHeaders:   []string{"X-Request-ID"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Health endpoints (unauthenticated)
 	s.Router.Get("/healthz", s.handleHealthz)

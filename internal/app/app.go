@@ -97,7 +97,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		logger.Info("OIDC authentication disabled (OIDC_ISSUER_URL not set)")
 	}
 
-	srv := httpserver.NewServer(logger, db, rdb, metricsReg, oidcAuth)
+	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, oidcAuth)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),
