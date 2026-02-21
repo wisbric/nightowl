@@ -20,15 +20,17 @@ import (
 
 // Server holds the HTTP server dependencies.
 type Server struct {
-	Router  *chi.Mux
-	Logger  *slog.Logger
-	DB      *pgxpool.Pool
-	Redis   *redis.Client
-	Metrics *prometheus.Registry
+	Router    *chi.Mux
+	APIRouter chi.Router // authenticated, tenant-scoped /api/v1 sub-router
+	Logger    *slog.Logger
+	DB        *pgxpool.Pool
+	Redis     *redis.Client
+	Metrics   *prometheus.Registry
 }
 
 // NewServer creates an HTTP server with middleware and health/metrics endpoints.
 // oidcAuth may be nil when OIDC is not configured (JWT auth will be unavailable).
+// Domain handlers should be mounted on APIRouter after calling NewServer.
 func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
 	s := &Server{
 		Router:  chi.NewRouter(),
@@ -70,7 +72,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *r
 		// 3. Require valid authentication on all /api/v1 routes.
 		r.Use(auth.RequireAuth)
 
-		// Placeholder — domain handlers will be mounted here in later phases.
+		// Debug endpoint.
 		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 			t := tenant.FromContext(r.Context())
 			id := auth.FromContext(r.Context())
@@ -82,6 +84,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *r
 				"method":  id.Method,
 			})
 		})
+
+		// Store reference so domain handlers can be mounted externally.
+		s.APIRouter = r
 	})
 
 	return s

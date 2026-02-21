@@ -18,6 +18,7 @@ import (
 	"github.com/wisbric/opswatch/internal/platform"
 	"github.com/wisbric/opswatch/internal/seed"
 	"github.com/wisbric/opswatch/internal/telemetry"
+	"github.com/wisbric/opswatch/pkg/incident"
 )
 
 // Run is the main application entry point. It reads config, connects to
@@ -98,6 +99,10 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	}
 
 	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, oidcAuth)
+
+	// Mount domain handlers.
+	incidentHandler := incident.NewHandler(logger)
+	srv.APIRouter.Mount("/incidents", incidentHandler.Routes())
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),

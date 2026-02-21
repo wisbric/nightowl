@@ -1,0 +1,302 @@
+package incident
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// --- Fake store/service for handler tests ---
+
+// fakeStore implements enough of the Store behaviour for handler tests by
+// delegating to function fields that each test can set up as needed.
+type fakeStore struct {
+	getFn           func(ctx context.Context, id uuid.UUID) (IncidentRow, error)
+	createFn        func(ctx context.Context, p CreateParams) (IncidentRow, error)
+	updateFn        func(ctx context.Context, p UpdateParams) (IncidentRow, error)
+	softDeleteFn    func(ctx context.Context, id uuid.UUID) error
+	listFilteredFn  func(ctx context.Context, f ListFilters, limit, offset int) ([]IncidentRow, error)
+	countFilteredFn func(ctx context.Context, f ListFilters) (int, error)
+	createHistoryFn func(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error
+	listHistoryFn   func(ctx context.Context, incidentID uuid.UUID) ([]HistoryEntry, error)
+}
+
+func (f *fakeStore) Get(ctx context.Context, id uuid.UUID) (IncidentRow, error) {
+	return f.getFn(ctx, id)
+}
+func (f *fakeStore) Create(ctx context.Context, p CreateParams) (IncidentRow, error) {
+	return f.createFn(ctx, p)
+}
+func (f *fakeStore) Update(ctx context.Context, p UpdateParams) (IncidentRow, error) {
+	return f.updateFn(ctx, p)
+}
+func (f *fakeStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	return f.softDeleteFn(ctx, id)
+}
+func (f *fakeStore) ListFiltered(ctx context.Context, f2 ListFilters, limit, offset int) ([]IncidentRow, error) {
+	return f.listFilteredFn(ctx, f2, limit, offset)
+}
+func (f *fakeStore) CountFiltered(ctx context.Context, f2 ListFilters) (int, error) {
+	return f.countFilteredFn(ctx, f2)
+}
+func (f *fakeStore) CreateHistory(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error {
+	if f.createHistoryFn != nil {
+		return f.createHistoryFn(ctx, incidentID, changedBy, changeType, diff)
+	}
+	return nil
+}
+func (f *fakeStore) ListHistory(ctx context.Context, incidentID uuid.UUID) ([]HistoryEntry, error) {
+	if f.listHistoryFn != nil {
+		return f.listHistoryFn(ctx, incidentID)
+	}
+	return nil, nil
+}
+
+func sampleRow() IncidentRow {
+	return IncidentRow{
+		ID:              uuid.New(),
+		Title:           "Pod CrashLoopBackOff",
+		Fingerprints:    []string{"fp1"},
+		Severity:        "critical",
+		Tags:            []string{"k8s"},
+		Services:        []string{"payment-service"},
+		Clusters:        []string{},
+		Namespaces:      []string{},
+		ErrorPatterns:   []string{},
+		ResolutionCount: 0,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+}
+
+func TestCreateIncident_Validation(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "missing title",
+			body:       `{"severity":"critical"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "title too short",
+			body:       `{"title":"ab","severity":"warning"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "invalid severity",
+			body:       `{"title":"test incident","severity":"extreme"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "missing severity",
+			body:       `{"title":"test incident"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "invalid JSON",
+			body:       `{bad}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "empty body",
+			body:       ``,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/incidents", strings.NewReader(tt.body))
+			r.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, r)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d; body = %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestGetIncident_InvalidID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	r := httptest.NewRequest(http.MethodGet, "/incidents/not-a-uuid", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestUpdateIncident_Validation(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "missing required fields",
+			body:       `{}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "invalid severity",
+			body:       `{"title":"test","severity":"wrong"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id := uuid.New()
+			r := httptest.NewRequest(http.MethodPut, "/incidents/"+id.String(), strings.NewReader(tt.body))
+			r.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d; body = %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestDeleteIncident_InvalidID(t *testing.T) {
+	h := NewHandler(nil)
+	router := chi.NewRouter()
+	router.Mount("/incidents", h.Routes())
+
+	r := httptest.NewRequest(http.MethodDelete, "/incidents/not-a-uuid", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestComputeDiff(t *testing.T) {
+	old := IncidentRow{
+		Title:    "Old Title",
+		Severity: "warning",
+		Tags:     []string{"a"},
+	}
+	new := IncidentRow{
+		Title:    "New Title",
+		Severity: "critical",
+		Tags:     []string{"a", "b"},
+	}
+
+	diff := computeDiff(old, new)
+
+	if _, ok := diff["title"]; !ok {
+		t.Error("expected title in diff")
+	}
+	if _, ok := diff["severity"]; !ok {
+		t.Error("expected severity in diff")
+	}
+	if _, ok := diff["tags"]; !ok {
+		t.Error("expected tags in diff")
+	}
+	// Unchanged fields should not appear.
+	if _, ok := diff["symptoms"]; ok {
+		t.Error("symptoms should not be in diff (both nil)")
+	}
+}
+
+func TestComputeDiff_NoDifference(t *testing.T) {
+	row := sampleRow()
+	diff := computeDiff(row, row)
+
+	if len(diff) != 0 {
+		t.Errorf("expected empty diff for identical rows, got %d entries", len(diff))
+	}
+}
+
+func TestIncidentRowToResponse(t *testing.T) {
+	row := sampleRow()
+	resp := row.ToResponse()
+
+	if resp.ID != row.ID {
+		t.Errorf("ID = %v, want %v", resp.ID, row.ID)
+	}
+	if resp.Title != row.Title {
+		t.Errorf("Title = %q, want %q", resp.Title, row.Title)
+	}
+	if resp.Severity != row.Severity {
+		t.Errorf("Severity = %q, want %q", resp.Severity, row.Severity)
+	}
+	// Nil slices should become empty slices (not null in JSON).
+	if resp.Clusters == nil {
+		t.Error("Clusters should be [] not nil")
+	}
+	// Nullable UUID fields should be nil when not set.
+	if resp.RunbookID != nil {
+		t.Error("RunbookID should be nil")
+	}
+}
+
+func TestEnsureSlice(t *testing.T) {
+	if s := ensureSlice(nil); s == nil {
+		t.Error("ensureSlice(nil) should return non-nil empty slice")
+	}
+	input := []string{"a", "b"}
+	if s := ensureSlice(input); len(s) != 2 {
+		t.Errorf("ensureSlice preserved slice, got len %d", len(s))
+	}
+}
+
+func TestParseUUIDPtr(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		result, err := ParseUUIDPtr(nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Valid {
+			t.Error("expected invalid UUID for nil input")
+		}
+	})
+
+	t.Run("valid UUID", func(t *testing.T) {
+		s := "550e8400-e29b-41d4-a716-446655440000"
+		result, err := ParseUUIDPtr(&s)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result.Valid {
+			t.Error("expected valid UUID")
+		}
+	})
+
+	t.Run("invalid UUID", func(t *testing.T) {
+		s := "not-a-uuid"
+		_, err := ParseUUIDPtr(&s)
+		if err == nil {
+			t.Error("expected error for invalid UUID")
+		}
+	})
+}
