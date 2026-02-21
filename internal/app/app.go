@@ -19,6 +19,7 @@ import (
 	"github.com/wisbric/opswatch/internal/platform"
 	"github.com/wisbric/opswatch/internal/seed"
 	"github.com/wisbric/opswatch/internal/telemetry"
+	"github.com/wisbric/opswatch/pkg/alert"
 	"github.com/wisbric/opswatch/pkg/incident"
 	"github.com/wisbric/opswatch/pkg/runbook"
 )
@@ -113,6 +114,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	runbookHandler := runbook.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/runbooks", runbookHandler.Routes())
+
+	webhookHandler := alert.NewWebhookHandler(logger, auditWriter)
+	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
 
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
