@@ -234,3 +234,41 @@ export interface User {
   tenant_slug: string;
   created_at: string;
 }
+
+export interface UsersResponse {
+  users: UserDetail[];
+  count: number;
+}
+
+export interface UserDetail {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  timezone: string;
+  phone?: string;
+  slack_user_id?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiKeysResponse {
+  keys: ApiKeyDetail[];
+  count: number;
+}
+
+export interface ApiKeyDetail {
+  id: string;
+  key_prefix: string;
+  description: string;
+  role: string;
+  scopes: string[];
+  last_used?: string;
+  expires_at?: string;
+  created_at: string;
+}
+
+export interface ApiKeyCreateResponse extends ApiKeyDetail {
+  raw_key: string;
+}

@@ -20,12 +20,14 @@ import (
 	"github.com/wisbric/nightowl/internal/seed"
 	"github.com/wisbric/nightowl/internal/telemetry"
 	"github.com/wisbric/nightowl/pkg/alert"
+	"github.com/wisbric/nightowl/pkg/apikey"
 	"github.com/wisbric/nightowl/pkg/escalation"
 	"github.com/wisbric/nightowl/pkg/incident"
 	"github.com/wisbric/nightowl/pkg/integration"
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
+	"github.com/wisbric/nightowl/pkg/user"
 )
 
 // Run is the main application entry point. It reads config, connects to
@@ -141,6 +143,12 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	twilioHandler := integration.NewTwilioHandler(logger)
 	srv.APIRouter.Mount("/twilio", twilioHandler.Routes())
+
+	userHandler := user.NewHandler(logger, auditWriter)
+	srv.APIRouter.Mount("/users", userHandler.Routes())
+
+	apikeyHandler := apikey.NewHandler(logger, auditWriter, db)
+	srv.APIRouter.Mount("/api-keys", apikeyHandler.Routes())
 
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())

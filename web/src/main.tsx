@@ -14,6 +14,8 @@ import { RosterDetailPage } from "@/pages/roster-detail";
 import { EscalationListPage } from "@/pages/escalation-list";
 import { EscalationDetailPage } from "@/pages/escalation-detail";
 import { AdminPage } from "@/pages/admin";
+import { AdminUsersPage } from "@/pages/admin-users";
+import { AdminApiKeysPage } from "@/pages/admin-api-keys";
 import { AuditLogPage } from "@/pages/audit-log";
 import { RunbookListPage } from "@/pages/runbook-list";
 import { RunbookDetailPage } from "@/pages/runbook-detail";
@@ -47,6 +49,8 @@ const escalationDetailRoute = createRoute({ getParentRoute: () => rootRoute, pat
 const runbooksRoute = createRoute({ getParentRoute: () => rootRoute, path: "/runbooks", component: RunbookListPage });
 const runbookDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/runbooks/$runbookId", component: RunbookDetailPage });
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: AdminPage });
+const adminUsersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/users", component: AdminUsersPage });
+const adminApiKeysRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/api-keys", component: AdminApiKeysPage });
 const auditLogRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/audit-log", component: AuditLogPage });
 
 const routeTree = rootRoute.addChildren([
@@ -62,6 +66,8 @@ const routeTree = rootRoute.addChildren([
   escalationRoute,
   escalationDetailRoute,
   adminRoute,
+  adminUsersRoute,
+  adminApiKeysRoute,
   auditLogRoute,
 ]);
 

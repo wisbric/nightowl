@@ -17,24 +17,28 @@ export function AdminPage() {
       <h1 className="text-2xl font-bold">Administration</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="opacity-75">
-          <CardContent className="flex items-center gap-3 p-4">
-            <Users className="h-8 w-8 text-muted-foreground" />
-            <div>
-              <p className="font-medium">Users</p>
-              <p className="text-xs text-muted-foreground">Coming soon</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="opacity-75">
-          <CardContent className="flex items-center gap-3 p-4">
-            <Key className="h-8 w-8 text-muted-foreground" />
-            <div>
-              <p className="font-medium">API Keys</p>
-              <p className="text-xs text-muted-foreground">Coming soon</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link to="/admin/users">
+          <Card className="cursor-pointer hover:border-accent transition-colors">
+            <CardContent className="flex items-center gap-3 p-4">
+              <Users className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Users</p>
+                <p className="text-xs text-muted-foreground">Manage team members</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/admin/api-keys">
+          <Card className="cursor-pointer hover:border-accent transition-colors">
+            <CardContent className="flex items-center gap-3 p-4">
+              <Key className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">API Keys</p>
+                <p className="text-xs text-muted-foreground">Manage API keys</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
         <Card className="opacity-75">
           <CardContent className="flex items-center gap-3 p-4">
             <Settings className="h-8 w-8 text-muted-foreground" />
