@@ -1,0 +1,66 @@
+# docker compose -f docker-compose.demo.yml up --build
+# Opens the full NightOwl demo at http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nightowl
+      POSTGRES_PASSWORD: nightowl
+      POSTGRES_DB: nightowl
+    volumes:
+      - demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightowl"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: runs migrations + seeds demo data, then exits.
+  seed:
+    build: .
+    entrypoint: ["/nightowl", "-mode", "seed-demo"]
+    environment:
+      DATABASE_URL: postgres://nightowl:nightowl@postgres:5432/nightowl?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    networks:
+      default:
+        aliases:
+          - nightowl-api
+    environment:
+      NIGHTOWL_MODE: api
+      DATABASE_URL: postgres://nightowl:nightowl@postgres:5432/nightowl?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      CORS_ALLOWED_ORIGINS: "*"
+      LOG_FORMAT: text
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./web
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  demo-pgdata:
