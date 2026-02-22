@@ -281,3 +281,15 @@ export interface TenantConfigResponse {
   default_timezone: string;
   updated_at: string;
 }
+
+export interface StatusResponse {
+  status: string;
+  version: string;
+  uptime: string;
+  uptime_seconds: number;
+  database: string;
+  database_latency_ms: number;
+  redis: string;
+  redis_latency_ms: number;
+  last_alert_at: string | null;
+}

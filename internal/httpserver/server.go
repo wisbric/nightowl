@@ -3,7 +3,9 @@ package httpserver
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,6 +29,7 @@ type Server struct {
 	DB        *pgxpool.Pool
 	Redis     *redis.Client
 	Metrics   *prometheus.Registry
+	startedAt time.Time
 }
 
 // NewServer creates an HTTP server with middleware and health/metrics endpoints.
@@ -34,11 +37,12 @@ type Server struct {
 // Domain handlers should be mounted on APIRouter after calling NewServer.
 func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
 	s := &Server{
-		Router:  chi.NewRouter(),
-		Logger:  logger,
-		DB:      db,
-		Redis:   rdb,
-		Metrics: metricsReg,
+		Router:    chi.NewRouter(),
+		Logger:    logger,
+		DB:        db,
+		Redis:     rdb,
+		Metrics:   metricsReg,
+		startedAt: time.Now(),
 	}
 
 	// Global middleware
@@ -135,4 +139,72 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Respond(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+// statusResponse is the JSON shape returned by HandleStatus.
+type statusResponse struct {
+	Status          string  `json:"status"`
+	Version         string  `json:"version"`
+	Uptime          string  `json:"uptime"`
+	UptimeSeconds   int64   `json:"uptime_seconds"`
+	Database        string  `json:"database"`
+	DatabaseLatency float64 `json:"database_latency_ms"`
+	Redis           string  `json:"redis"`
+	RedisLatency    float64 `json:"redis_latency_ms"`
+	LastAlertAt     *string `json:"last_alert_at"`
+}
+
+// HandleStatus returns system health information including DB/Redis connectivity,
+// uptime, and the timestamp of the most recent alert.
+func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	uptime := time.Since(s.startedAt)
+
+	resp := statusResponse{
+		Version:       "0.1.0",
+		Uptime:        uptime.Truncate(time.Second).String(),
+		UptimeSeconds: int64(uptime.Seconds()),
+	}
+
+	// Ping database.
+	dbStart := time.Now()
+	if err := s.DB.Ping(ctx); err != nil {
+		s.Logger.Error("status check: database ping failed", "error", err)
+		resp.Database = "error"
+	} else {
+		resp.Database = "ok"
+	}
+	resp.DatabaseLatency = math.Round(float64(time.Since(dbStart).Microseconds())/10) / 100 // ms with 2 decimal places
+
+	// Ping Redis.
+	redisStart := time.Now()
+	if err := s.Redis.Ping(ctx).Err(); err != nil {
+		s.Logger.Error("status check: redis ping failed", "error", err)
+		resp.Redis = "error"
+	} else {
+		resp.Redis = "ok"
+	}
+	resp.RedisLatency = math.Round(float64(time.Since(redisStart).Microseconds())/10) / 100
+
+	// Overall status.
+	if resp.Database == "ok" && resp.Redis == "ok" {
+		resp.Status = "ok"
+	} else {
+		resp.Status = "degraded"
+	}
+
+	// Query last alert timestamp from tenant schema.
+	conn := tenant.ConnFromContext(ctx)
+	if conn != nil {
+		var lastAlert *time.Time
+		err := conn.QueryRow(ctx, "SELECT MAX(last_fired_at) FROM alerts").Scan(&lastAlert)
+		if err != nil {
+			s.Logger.Error("status check: querying last alert", "error", err)
+		} else if lastAlert != nil {
+			formatted := lastAlert.UTC().Format(time.RFC3339)
+			resp.LastAlertAt = &formatted
+		}
+	}
+
+	Respond(w, http.StatusOK, resp)
 }

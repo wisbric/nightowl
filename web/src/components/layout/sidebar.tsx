@@ -6,6 +6,7 @@ import {
   FileText,
   Users,
   ArrowUpCircle,
+  Activity,
   Settings,
   Moon,
   Sun,
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/runbooks", label: "Runbooks", icon: FileText },
   { to: "/rosters", label: "Rosters", icon: Users },
   { to: "/escalation", label: "Escalation", icon: ArrowUpCircle },
+  { to: "/status", label: "Status", icon: Activity },
   { to: "/admin", label: "Admin", icon: Settings },
 ] as const;
 

@@ -20,6 +20,7 @@ import { AdminConfigPage } from "@/pages/admin-config";
 import { AuditLogPage } from "@/pages/audit-log";
 import { RunbookListPage } from "@/pages/runbook-list";
 import { RunbookDetailPage } from "@/pages/runbook-detail";
+import { StatusPage } from "@/pages/status";
 import "./index.css";
 
 initTheme();
@@ -54,6 +55,7 @@ const adminUsersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/a
 const adminApiKeysRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/api-keys", component: AdminApiKeysPage });
 const adminConfigRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/config", component: AdminConfigPage });
 const auditLogRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/audit-log", component: AuditLogPage });
+const statusRoute = createRoute({ getParentRoute: () => rootRoute, path: "/status", component: StatusPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -67,6 +69,7 @@ const routeTree = rootRoute.addChildren([
   runbookDetailRoute,
   escalationRoute,
   escalationDetailRoute,
+  statusRoute,
   adminRoute,
   adminUsersRoute,
   adminApiKeysRoute,

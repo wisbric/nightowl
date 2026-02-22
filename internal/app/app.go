@@ -117,6 +117,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, oidcAuth)
 
+	// System status endpoint.
+	srv.APIRouter.Get("/status", srv.HandleStatus)
+
 	// Mount domain handlers.
 	incidentHandler := incident.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/incidents", incidentHandler.Routes())
