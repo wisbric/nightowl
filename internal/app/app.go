@@ -89,6 +89,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return runWorker(ctx, logger, db, rdb, metricsReg)
 	case "seed":
 		return seed.Run(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
+	case "seed-demo":
+		return seed.RunDemo(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
 	default:
 		return fmt.Errorf("unknown mode: %s", cfg.Mode)
 	}

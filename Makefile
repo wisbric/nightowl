@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint fmt sqlc migrate-up migrate-down docker clean check seed
+.PHONY: build test test-integration lint fmt sqlc migrate-up migrate-down docker clean check seed seed-demo
 
 BIN := bin/nightowl
 DATABASE_URL ?= postgres://nightowl:nightowl@localhost:5432/nightowl?sslmode=disable
@@ -33,6 +33,9 @@ docker:
 
 seed:
 	go run ./cmd/nightowl -mode seed
+
+seed-demo:
+	go run ./cmd/nightowl -mode seed-demo
 
 clean:
 	rm -rf bin/ coverage.out internal/db/
