@@ -30,7 +30,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-56 flex-col bg-sidebar text-sidebar-foreground shrink-0">
       <div className="flex items-center gap-2 px-4 py-5 border-b border-white/10">
-        <img src="/owl-icon.svg" alt="NightOwl" className="h-8 w-8" />
+        <img src="/owl-logo.png" alt="NightOwl" className="h-8 w-8" />
         <span className="text-lg font-bold tracking-tight">NightOwl</span>
       </div>
 
