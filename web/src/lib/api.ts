@@ -1,4 +1,10 @@
 const API_BASE = "/api/v1";
+const DEV_API_KEY = "ow_dev_seed_key_do_not_use_in_production";
+
+function getApiKey(): string | null {
+  return localStorage.getItem("nightowl_api_key")
+    || (import.meta.env.DEV ? DEV_API_KEY : null);
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -6,7 +12,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...(options?.headers as Record<string, string>),
   };
 
-  const apiKey = localStorage.getItem("nightowl_api_key");
+  const apiKey = getApiKey();
   if (apiKey) {
     headers["X-API-Key"] = apiKey;
   }

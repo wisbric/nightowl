@@ -85,9 +85,11 @@ export function AdminPage() {
               Save
             </Button>
           </div>
-          {localStorage.getItem("nightowl_api_key") && (
+          {localStorage.getItem("nightowl_api_key") ? (
             <p className="text-xs text-severity-ok">API key configured</p>
-          )}
+          ) : import.meta.env.DEV ? (
+            <p className="text-xs text-muted-foreground">Using dev seed key (auto)</p>
+          ) : null}
         </CardContent>
       </Card>
     </div>
