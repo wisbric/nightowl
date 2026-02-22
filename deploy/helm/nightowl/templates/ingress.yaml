@@ -33,9 +33,15 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
+                {{- if eq (.service | default "api") "frontend" }}
+                name: {{ include "nightowl.fullname" $ }}-frontend
+                port:
+                  number: {{ $.Values.frontend.service.port | default 80 }}
+                {{- else }}
                 name: {{ include "nightowl.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
+                {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}

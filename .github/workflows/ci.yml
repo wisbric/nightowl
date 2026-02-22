@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -56,7 +56,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
       - run: go build -trimpath -o bin/nightowl ./cmd/nightowl
       - name: Docker build
         run: docker build -t nightowl:ci .
@@ -85,3 +85,22 @@ jobs:
         with:
           sqlc-version: "1.27.0"
       - run: sqlc diff
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: cd web && npm ci
+      - name: Lint
+        run: cd web && npm run lint
+      - name: Type check
+        run: cd web && npx tsc --noEmit
+      - name: Build
+        run: cd web && npm run build

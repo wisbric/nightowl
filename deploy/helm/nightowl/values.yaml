@@ -46,6 +46,28 @@ worker:
   tolerations: []
   affinity: {}
 
+# -- Frontend (nginx + React SPA)
+frontend:
+  enabled: false
+  image:
+    repository: ghcr.io/wisbric/nightowl-web
+    pullPolicy: IfNotPresent
+    tag: ""  # defaults to appVersion
+  replicas: 2
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 # -- Application configuration (env vars)
 config:
   logLevel: info
