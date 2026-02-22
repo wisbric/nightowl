@@ -47,18 +47,18 @@ Design inspired by the Wisbric site aesthetic: clean, professional, dark-capable
 | `--muted-foreground` | `#6B7280`   | `#9CA3AF`   | Secondary text, timestamps               |
 | `--border`           | `#E5E7EB`   | `#2D3039`   | Borders, dividers                        |
 | `--input`            | `#E5E7EB`   | `#2D3039`   | Input field borders                      |
-| `--ring`             | `#D97706`   | `#F59E0B`   | Focus rings                              |
+| `--ring`             | `#00e5a0`   | `#00e5a0`   | Focus rings (Wisbric green)              |
 
 ### Brand Colors
 
 | Token               | Value        | Usage                                    |
 |----------------------|-------------|------------------------------------------|
-| `--primary`          | `#1E3A5F`   | Primary actions, navigation, headers (deep navy) |
+| `--primary`          | `#0A2E24`   | Primary actions, navigation, sidebar (dark green) |
 | `--primary-foreground` | `#FFFFFF` | Text on primary                          |
 | `--secondary`        | `#374151`   | Secondary actions (slate gray)           |
 | `--secondary-foreground` | `#FFFFFF` | Text on secondary                      |
-| `--accent`           | `#D97706`   | Owl-gold accent — highlights, active states, focus |
-| `--accent-foreground` | `#FFFFFF`  | Text on accent                           |
+| `--accent`           | `#00e5a0`   | Wisbric green accent — highlights, active states, focus |
+| `--accent-foreground` | `#0F1117`  | Text on accent (dark, for contrast on bright green) |
 
 ### Severity Colors
 
@@ -157,7 +157,7 @@ export default {
 ### Navigation
 
 - **Sidebar** layout (not top nav) — standard for ops dashboards
-- Sidebar: dark background (`--primary` navy), white text, accent highlight on active item
+- Sidebar: dark background (`--primary` dark green), white text, Wisbric green accent highlight on active item
 - Owl icon + "NightOwl" wordmark at top of sidebar
 - Navigation groups: Dashboard, Alerts, Knowledge Base, Rosters, Escalation, Admin
 - Collapse to icon-only on narrow screens
@@ -190,7 +190,7 @@ export default {
 
 ### Buttons
 
-- Primary: navy (`--primary`) background, white text, owl-gold hover ring
+- Primary: dark green (`--primary`) background, white text, Wisbric green hover ring
 - Secondary: outlined, gray border
 - Destructive: red background for dangerous actions (resolve, delete, escalate)
 - All buttons: `rounded-md`, medium height, clear hover/active states
