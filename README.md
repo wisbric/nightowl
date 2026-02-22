@@ -1,25 +1,45 @@
-# NightOwl
+<p align="center">
+  <img src="docs/owl.png" alt="NightOwl" width="120">
+</p>
 
-**The wise one that watches while you sleep.**
+<h1 align="center">NightOwl</h1>
 
-NightOwl is an incident knowledge base, alert management, on-call roster, and escalation platform built for 24/7 operations teams running Kubernetes infrastructure across multiple time zones. It is a [Wisbric](https://wisbric.com) product.
+<p align="center">
+  <em>The wise one that watches while you sleep.</em>
+</p>
+
+<p align="center">
+  <a href="https://wisbric.com"><img src="https://img.shields.io/badge/a_Wisbric_product-0F1117?style=flat&labelColor=0F1117&color=00e5a0" alt="A Wisbric product"></a>
+</p>
+
+---
+
+NightOwl is an incident knowledge base, alert management, on-call roster, and escalation platform built for 24/7 operations teams running Kubernetes infrastructure across multiple time zones. It combines a searchable knowledge base of past incidents with real-time alert ingestion, intelligent deduplication, configurable escalation policies, and follow-the-sun roster management — all in a single, self-hosted binary. It is a [Wisbric](https://wisbric.com) product.
+
+<p align="center">
+  <img src="docs/dashboard.png" alt="NightOwl Dashboard" width="900">
+</p>
 
 ---
 
 ## Features
 
-- **Alert management** with deduplication and knowledge base enrichment
-- **Incident knowledge base** with full-text search
-- **On-call roster management** with timezone support
-- **Timer-based escalation engine** with phone/SMS callout
-- **Slack integration** (slash commands, interactive messages, notifications)
-- **Multi-tenant schema isolation** (schema-per-tenant)
-- **OIDC + API key authentication** with role-based access control
-- **Prometheus metrics + OpenTelemetry tracing**
+- **Incident Knowledge Base** — full-text search, merge, history tracking, and runbook linking
+- **Alert Ingestion** — webhook receivers for Alertmanager, Keep, and generic sources with Redis-backed deduplication
+- **On-Call Rosters** — daily/weekly/custom rotations, follow-the-sun, overrides, and iCal export
+- **Escalation Policies** — multi-tier escalation with Slack, SMS, and phone notifications, plus dry-run simulation
+- **Runbooks** — Markdown runbooks with templates, linked directly to incidents
+- **Multi-Tenancy** — schema-per-tenant PostgreSQL isolation
+- **OIDC + API Key Auth** — role-based access control with OIDC and API key authentication
+- **Audit Trail** — every API action logged with user, IP, and detail
+- **API Documentation** — built-in Swagger UI at `/api/docs`
+- **Observability** — Prometheus metrics and OpenTelemetry tracing
+- **Dark Mode** — default dark theme optimized for 3am on-call dashboards
 
 ## Tech Stack
 
-Go 1.23+ | chi router | PostgreSQL 16+ (pgx + sqlc) | Redis (go-redis/v9) | React 18 + TypeScript + Vite + Tailwind + shadcn/ui
+**Backend:** Go 1.23+, chi, PostgreSQL 16+ (pgx + sqlc), Redis (go-redis/v9), OIDC, OpenTelemetry
+**Frontend:** React 18, TypeScript, Vite, shadcn/ui, Tailwind CSS, TanStack Query
 
 ---
 
@@ -32,21 +52,25 @@ Go 1.23+ | chi router | PostgreSQL 16+ (pgx + sqlc) | Redis (go-redis/v9) | Reac
 docker compose up -d
 
 # Run migrations and seed data
-go run ./cmd/nightowl -mode seed
+make migrate
+make seed-demo
 
 # Start the API server
-go run ./cmd/nightowl
+go run ./cmd/nightowl -mode api
 
 # Start the frontend dev server (separate terminal)
 cd web && npm install && npm run dev
 
 # API is at http://localhost:8080, Frontend at http://localhost:3000
+# API docs at http://localhost:8080/api/docs
 # Dev API key: ow_dev_seed_key_do_not_use_in_production
 ```
 
 ---
 
 ## API Endpoints
+
+Full interactive documentation is available at [`/api/docs`](http://localhost:8080/api/docs) (Swagger UI) and the raw OpenAPI spec at [`/api/docs/openapi.yaml`](http://localhost:8080/api/docs/openapi.yaml).
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -74,6 +98,21 @@ cd web && npm install && npm run dev
 | `GET` | `/healthz` | Liveness probe |
 | `GET` | `/readyz` | Readiness probe |
 | `GET` | `/metrics` | Prometheus metrics |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Requirements](docs/01-requirements.md) | Product requirements and feature matrix |
+| [Architecture](docs/02-architecture.md) | System architecture and tech stack |
+| [Data Model](docs/03-data-model.md) | PostgreSQL schema and multi-tenancy |
+| [Integrations](docs/04-integrations-workflow.md) | Slack, webhooks, Twilio, roster handoff |
+| [Tasks](docs/05-tasks.md) | Implementation task breakdown |
+| [Branding](docs/06-branding.md) | Design system, colors, typography |
+| [Deployment](docs/07-deployment.md) | CI/CD, containers, Helm charts |
+| [API Reference](docs/api/openapi.yaml) | OpenAPI 3.0.3 specification |
 
 ---
 
@@ -144,6 +183,7 @@ make lint           # Run linter
 make sqlc           # Regenerate sqlc code
 make migrate-up     # Run global migrations
 make seed           # Seed development data
+make seed-demo      # Seed comprehensive demo data
 make docker         # Build Docker image
 ```
 
@@ -159,6 +199,7 @@ internal/
   audit/                 Audit log writer
   config/                Configuration loading
   db/                    sqlc generated code
+  docs/                  Swagger UI + OpenAPI spec handler
   httpserver/            HTTP server + middleware
   platform/              Database + Redis clients
   seed/                  Development seed data
@@ -173,6 +214,8 @@ pkg/
   slack/                 Slack bot integration
   tenant/                Multi-tenancy middleware
 web/                     React frontend (Vite + TypeScript)
+docs/
+  api/                   OpenAPI 3.0.3 specification
 deploy/
   helm/nightowl/         Helm chart
   grafana/               Grafana dashboard
@@ -186,3 +229,9 @@ migrations/
 ## License
 
 Copyright Wisbric. All rights reserved.
+
+---
+
+<p align="center">
+  A <a href="https://wisbric.com">Wisbric</a> product
+</p>

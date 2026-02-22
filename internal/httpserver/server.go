@@ -15,6 +15,7 @@ import (
 
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/config"
+	"github.com/wisbric/nightowl/internal/docs"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
@@ -60,6 +61,10 @@ func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *r
 
 	// Prometheus metrics (unauthenticated)
 	s.Router.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
+
+	// API documentation (unauthenticated)
+	s.Router.Get("/api/docs", docs.SwaggerUIHandler())
+	s.Router.Get("/api/docs/openapi.yaml", docs.OpenAPISpecHandler())
 
 	// Authenticated, tenant-scoped API routes.
 	s.Router.Route("/api/v1", func(r chi.Router) {

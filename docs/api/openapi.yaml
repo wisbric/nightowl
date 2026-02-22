@@ -1,0 +1,2863 @@
+openapi: 3.0.3
+info:
+  title: NightOwl API
+  description: |
+    NightOwl is an incident knowledge base, alert management, on-call roster,
+    and escalation platform for 24/7 operations teams.
+
+    ## Authentication
+
+    All `/api/v1` endpoints require authentication via one of:
+    - **Bearer token** — `Authorization: Bearer <JWT>` (OIDC)
+    - **API key** — `X-API-Key: <key>` header
+
+    Webhook receivers (`/api/v1/webhooks/*`) also require authentication.
+
+    ## Multi-tenancy
+
+    NightOwl uses schema-per-tenant isolation. The tenant is resolved from
+    the authenticated identity (JWT claim or API key binding). In dev mode,
+    the `X-Tenant-Slug` header can override tenant resolution.
+  version: 1.0.0
+  contact:
+    name: Wisbric
+    url: https://wisbric.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Auth
+    description: Authentication debug endpoints
+  - name: Incidents
+    description: Incident knowledge base CRUD, search, merge, and history
+  - name: Alerts
+    description: Alert management — list, acknowledge, resolve
+  - name: Webhooks
+    description: Inbound webhook receivers for alerting systems
+  - name: Runbooks
+    description: Runbook CRUD and templates
+  - name: Rosters
+    description: On-call rosters, members, overrides, and iCal export
+  - name: Escalation Policies
+    description: Escalation policy CRUD, dry-run simulation, and event log
+  - name: Users
+    description: User management
+  - name: API Keys
+    description: API key lifecycle
+  - name: Tenant Config
+    description: Tenant configuration (admin only)
+  - name: Audit Log
+    description: Audit trail of API actions
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  # ── Health ──────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      operationId: healthz
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+
+  /readyz:
+    get:
+      operationId: readyz
+      tags: [Health]
+      summary: Readiness probe
+      description: Checks database and Redis connectivity.
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ready
+        "503":
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: unavailable
+                message: database not ready
+
+  # ── Auth ────────────────────────────────────────────────────────────
+  /api/v1/ping:
+    get:
+      operationId: ping
+      tags: [Auth]
+      summary: Auth debug endpoint
+      description: Returns the resolved tenant, schema, subject, role, and auth method.
+      responses:
+        "200":
+          description: Authenticated identity info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PingResponse"
+              example:
+                tenant: acme
+                schema: tenant_acme
+                subject: user@example.com
+                role: admin
+                method: api_key
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Incidents ───────────────────────────────────────────────────────
+  /api/v1/incidents:
+    post:
+      operationId: createIncident
+      tags: [Incidents]
+      summary: Create an incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentCreateRequest"
+      responses:
+        "201":
+          description: Incident created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listIncidents
+      tags: [Incidents]
+      summary: List incidents (paginated)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, critical, major]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          description: Filter by tag (repeatable)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Paginated list of incidents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/incidents/search:
+    get:
+      operationId: searchIncidents
+      tags: [Incidents]
+      summary: Full-text search incidents
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            minLength: 1
+          example: CrashLoopBackOff
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentSearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/incidents/fingerprint/{fp}:
+    get:
+      operationId: getIncidentByFingerprint
+      tags: [Incidents]
+      summary: Get incident by fingerprint
+      parameters:
+        - name: fp
+          in: path
+          required: true
+          schema:
+            type: string
+          example: k8s_crashloop_api-gateway
+      responses:
+        "200":
+          description: Incident matching the fingerprint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/incidents/{id}:
+    get:
+      operationId: getIncident
+      tags: [Incidents]
+      summary: Get incident by ID
+      description: Returns the incident with its full change history.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Incident with history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateIncident
+      tags: [Incidents]
+      summary: Update an incident
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentUpdateRequest"
+      responses:
+        "200":
+          description: Incident updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: deleteIncident
+      tags: [Incidents]
+      summary: Delete an incident
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Incident deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/incidents/{id}/merge:
+    post:
+      operationId: mergeIncident
+      tags: [Incidents]
+      summary: Merge a source incident into this target
+      description: |
+        Merges the source incident into the target (URL path `{id}`).
+        Fingerprints, tags, services, clusters, and namespaces are unioned.
+        The source incident is marked as merged.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeRequest"
+      responses:
+        "200":
+          description: Merged incident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Merge not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: merge_error
+                message: target incident is already merged
+
+  /api/v1/incidents/{id}/history:
+    get:
+      operationId: listIncidentHistory
+      tags: [Incidents]
+      summary: List change history for an incident
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: History entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Alerts ──────────────────────────────────────────────────────────
+  /api/v1/alerts:
+    get:
+      operationId: listAlerts
+      tags: [Alerts]
+      summary: List alerts with optional filters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [firing, acknowledged, resolved]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, critical, major]
+        - name: source
+          in: query
+          schema:
+            type: string
+          example: alertmanager
+        - name: after
+          in: query
+          description: Only alerts fired after this time (RFC 3339)
+          schema:
+            type: string
+            format: date-time
+        - name: before
+          in: query
+          description: Only alerts fired before this time (RFC 3339)
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/alerts/{id}:
+    get:
+      operationId: getAlert
+      tags: [Alerts]
+      summary: Get alert by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/alerts/{id}/acknowledge:
+    patch:
+      operationId: acknowledgeAlert
+      tags: [Alerts]
+      summary: Acknowledge an alert
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/alerts/{id}/resolve:
+    patch:
+      operationId: resolveAlert
+      tags: [Alerts]
+      summary: Resolve an alert
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Webhooks ────────────────────────────────────────────────────────
+  /api/v1/webhooks/alertmanager:
+    post:
+      operationId: webhookAlertmanager
+      tags: [Webhooks]
+      summary: Receive Alertmanager webhook
+      description: Accepts the standard Alertmanager webhook payload and creates or deduplicates alerts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertmanagerPayload"
+      responses:
+        "200":
+          description: Alerts processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookBatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/webhooks/keep:
+    post:
+      operationId: webhookKeep
+      tags: [Webhooks]
+      summary: Receive Keep webhook
+      description: Accepts a Keep alert payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeepPayload"
+      responses:
+        "200":
+          description: Alert processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookBatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/webhooks/generic:
+    post:
+      operationId: webhookGeneric
+      tags: [Webhooks]
+      summary: Receive generic webhook
+      description: Accepts a generic alert payload with optional agent metadata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenericWebhookPayload"
+      responses:
+        "200":
+          description: Alert processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookBatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Runbooks ────────────────────────────────────────────────────────
+  /api/v1/runbooks:
+    post:
+      operationId: createRunbook
+      tags: [Runbooks]
+      summary: Create a runbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunbookCreateRequest"
+      responses:
+        "201":
+          description: Runbook created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Runbook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listRunbooks
+      tags: [Runbooks]
+      summary: List runbooks (paginated)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated list of runbooks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunbookPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/runbooks/templates:
+    get:
+      operationId: listRunbookTemplates
+      tags: [Runbooks]
+      summary: List runbook templates
+      responses:
+        "200":
+          description: List of template runbooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Runbook"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/runbooks/{id}:
+    get:
+      operationId: getRunbook
+      tags: [Runbooks]
+      summary: Get runbook by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Runbook details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Runbook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateRunbook
+      tags: [Runbooks]
+      summary: Update a runbook
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunbookUpdateRequest"
+      responses:
+        "200":
+          description: Runbook updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Runbook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: deleteRunbook
+      tags: [Runbooks]
+      summary: Delete a runbook
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Runbook deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Rosters ─────────────────────────────────────────────────────────
+  /api/v1/rosters:
+    post:
+      operationId: createRoster
+      tags: [Rosters]
+      summary: Create an on-call roster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RosterCreateRequest"
+      responses:
+        "201":
+          description: Roster created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Roster"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listRosters
+      tags: [Rosters]
+      summary: List rosters
+      responses:
+        "200":
+          description: List of rosters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/rosters/{id}:
+    get:
+      operationId: getRoster
+      tags: [Rosters]
+      summary: Get roster by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Roster details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Roster"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateRoster
+      tags: [Rosters]
+      summary: Update a roster
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RosterUpdateRequest"
+      responses:
+        "200":
+          description: Roster updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Roster"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: deleteRoster
+      tags: [Rosters]
+      summary: Delete a roster
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Roster deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/rosters/{id}/oncall:
+    get:
+      operationId: getRosterOnCall
+      tags: [Rosters]
+      summary: Get current on-call for a roster
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: at
+          in: query
+          description: Point in time to query (RFC 3339). Defaults to now.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: On-call information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnCallResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/rosters/{id}/members:
+    get:
+      operationId: listRosterMembers
+      tags: [Rosters]
+      summary: List roster members
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: addRosterMember
+      tags: [Rosters]
+      summary: Add a member to a roster
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/rosters/{id}/members/{memberID}:
+    delete:
+      operationId: removeRosterMember
+      tags: [Rosters]
+      summary: Remove a member from a roster
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: memberID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Member removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/rosters/{id}/overrides:
+    get:
+      operationId: listRosterOverrides
+      tags: [Rosters]
+      summary: List roster overrides
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: List of overrides
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OverrideListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: createRosterOverride
+      tags: [Rosters]
+      summary: Create a roster override
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOverrideRequest"
+      responses:
+        "201":
+          description: Override created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterOverride"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/rosters/{id}/overrides/{overrideID}:
+    delete:
+      operationId: deleteRosterOverride
+      tags: [Rosters]
+      summary: Delete a roster override
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: overrideID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Override deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/rosters/{id}/export.ics:
+    get:
+      operationId: exportRosterICal
+      tags: [Rosters]
+      summary: Export roster schedule as iCalendar
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: iCalendar file
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Escalation Policies ─────────────────────────────────────────────
+  /api/v1/escalation-policies:
+    post:
+      operationId: createEscalationPolicy
+      tags: [Escalation Policies]
+      summary: Create an escalation policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalationPolicyCreateRequest"
+      responses:
+        "201":
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listEscalationPolicies
+      tags: [Escalation Policies]
+      summary: List escalation policies
+      responses:
+        "200":
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationPolicyListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/escalation-policies/{id}:
+    get:
+      operationId: getEscalationPolicy
+      tags: [Escalation Policies]
+      summary: Get escalation policy by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateEscalationPolicy
+      tags: [Escalation Policies]
+      summary: Update an escalation policy
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalationPolicyUpdateRequest"
+      responses:
+        "200":
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: deleteEscalationPolicy
+      tags: [Escalation Policies]
+      summary: Delete an escalation policy
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Policy deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/escalation-policies/{id}/dry-run:
+    post:
+      operationId: dryRunEscalationPolicy
+      tags: [Escalation Policies]
+      summary: Simulate escalation policy execution
+      description: Runs the policy against a hypothetical alert to preview the escalation steps.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DryRunRequest"
+      responses:
+        "200":
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DryRunResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/escalation-policies/{id}/events/{alertID}:
+    get:
+      operationId: listEscalationEvents
+      tags: [Escalation Policies]
+      summary: List escalation events for an alert
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: alertID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of escalation events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationEventListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Users ───────────────────────────────────────────────────────────
+  /api/v1/users:
+    post:
+      operationId: createUser
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listUsers
+      tags: [Users]
+      summary: List users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      tags: [Users]
+      summary: Get user by ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateUser
+      tags: [Users]
+      summary: Update a user
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: deleteUser
+      tags: [Users]
+      summary: Deactivate a user
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: User deactivated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── API Keys ────────────────────────────────────────────────────────
+  /api/v1/api-keys:
+    post:
+      operationId: createApiKey
+      tags: [API Keys]
+      summary: Create an API key
+      description: Returns the full API key in the response. This is the only time the raw key is visible.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreateRequest"
+      responses:
+        "201":
+          description: API key created (includes raw key)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    get:
+      operationId: listApiKeys
+      tags: [API Keys]
+      summary: List API keys
+      description: Returns API keys with masked prefixes (raw key is never shown after creation).
+      responses:
+        "200":
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/api-keys/{id}:
+    delete:
+      operationId: deleteApiKey
+      tags: [API Keys]
+      summary: Delete an API key
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: API key deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Tenant Config ───────────────────────────────────────────────────
+  /api/v1/admin/config:
+    get:
+      operationId: getTenantConfig
+      tags: [Tenant Config]
+      summary: Get tenant configuration
+      description: Requires the `admin` role.
+      responses:
+        "200":
+          description: Tenant configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    put:
+      operationId: updateTenantConfig
+      tags: [Tenant Config]
+      summary: Update tenant configuration
+      description: Requires the `admin` role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantConfigUpdateRequest"
+      responses:
+        "200":
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Audit Log ───────────────────────────────────────────────────────
+  /api/v1/audit-log:
+    get:
+      operationId: listAuditLog
+      tags: [Audit Log]
+      summary: List audit log entries
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: List of audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# ════════════════════════════════════════════════════════════════════════
+# Components
+# ════════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC JWT token
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: NightOwl API key (prefix `ow_`)
+
+  parameters:
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: bad_request
+            message: invalid incident ID
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: unauthorized
+            message: authentication required
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: forbidden
+            message: admin role required
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: not_found
+            message: resource not found
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+          example:
+            error: validation_error
+            message: request validation failed
+            details:
+              - field: title
+                message: must be at least 3 characters
+
+  schemas:
+    # ── Shared ──────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: not_found
+        message:
+          type: string
+          example: resource not found
+
+    ValidationErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: validation_error
+        message:
+          type: string
+          example: request validation failed
+        details:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+                example: title
+              message:
+                type: string
+                example: must be at least 3 characters
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, ready]
+
+    PingResponse:
+      type: object
+      required: [tenant, schema, subject, role, method]
+      properties:
+        tenant:
+          type: string
+          example: acme
+        schema:
+          type: string
+          example: tenant_acme
+        subject:
+          type: string
+          example: user@example.com
+        role:
+          type: string
+          example: admin
+        method:
+          type: string
+          example: api_key
+
+    # ── Incidents ───────────────────────────────────────────────────
+    IncidentCreateRequest:
+      type: object
+      required: [title, severity]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          example: CrashLoopBackOff on api-gateway
+        fingerprints:
+          type: array
+          items:
+            type: string
+          example: [k8s_crashloop_api-gateway]
+        severity:
+          type: string
+          enum: [info, warning, critical, major]
+          example: critical
+        category:
+          type: string
+          nullable: true
+          example: kubernetes
+        tags:
+          type: array
+          items:
+            type: string
+          example: [k8s, pod, crashloop]
+        services:
+          type: array
+          items:
+            type: string
+          example: [api-gateway]
+        clusters:
+          type: array
+          items:
+            type: string
+          example: [prod-us-east-1]
+        namespaces:
+          type: array
+          items:
+            type: string
+          example: [default]
+        symptoms:
+          type: string
+          nullable: true
+          example: Pod api-gateway-7f8b9c6d4-x2k9m is in CrashLoopBackOff state
+        error_patterns:
+          type: array
+          items:
+            type: string
+          example: ["Back-off restarting failed container"]
+        root_cause:
+          type: string
+          nullable: true
+          example: OOM killed due to memory limit of 256Mi
+        solution:
+          type: string
+          nullable: true
+          example: Increase memory limit to 512Mi in deployment spec
+        runbook_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    IncidentUpdateRequest:
+      type: object
+      required: [title, severity]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          example: CrashLoopBackOff on api-gateway
+        fingerprints:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+          enum: [info, warning, critical, major]
+          example: critical
+        category:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        services:
+          type: array
+          items:
+            type: string
+        clusters:
+          type: array
+          items:
+            type: string
+        namespaces:
+          type: array
+          items:
+            type: string
+        symptoms:
+          type: string
+          nullable: true
+        error_patterns:
+          type: array
+          items:
+            type: string
+        root_cause:
+          type: string
+          nullable: true
+        solution:
+          type: string
+          nullable: true
+        runbook_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    MergeRequest:
+      type: object
+      required: [source_id]
+      properties:
+        source_id:
+          type: string
+          format: uuid
+          description: ID of the incident to merge into the target
+
+    Incident:
+      type: object
+      required: [id, title, fingerprints, severity, tags, services, clusters, namespaces, error_patterns, resolution_count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: CrashLoopBackOff on api-gateway
+        fingerprints:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+          enum: [info, warning, critical, major]
+        category:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        services:
+          type: array
+          items:
+            type: string
+        clusters:
+          type: array
+          items:
+            type: string
+        namespaces:
+          type: array
+          items:
+            type: string
+        symptoms:
+          type: string
+          nullable: true
+        error_patterns:
+          type: array
+          items:
+            type: string
+        root_cause:
+          type: string
+          nullable: true
+        solution:
+          type: string
+          nullable: true
+        runbook_id:
+          type: string
+          format: uuid
+          nullable: true
+        resolution_count:
+          type: integer
+        last_resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_resolved_by:
+          type: string
+          format: uuid
+          nullable: true
+        avg_resolution_mins:
+          type: number
+          format: double
+          nullable: true
+        merged_into_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    IncidentDetail:
+      description: Incident with its full change history
+      allOf:
+        - $ref: "#/components/schemas/Incident"
+        - type: object
+          required: [history]
+          properties:
+            history:
+              type: array
+              items:
+                $ref: "#/components/schemas/HistoryEntry"
+
+    HistoryEntry:
+      type: object
+      required: [id, incident_id, change_type, diff, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        changed_by:
+          type: string
+          format: uuid
+          nullable: true
+        change_type:
+          type: string
+          example: created
+        diff:
+          type: object
+          additionalProperties: true
+          description: JSON diff of the change
+        created_at:
+          type: string
+          format: date-time
+
+    IncidentSearchResult:
+      type: object
+      required: [id, title, severity, services, tags, rank, title_highlight, symptoms_highlight, solution_highlight, resolution_count, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        severity:
+          type: string
+        category:
+          type: string
+          nullable: true
+        services:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        symptoms:
+          type: string
+          nullable: true
+        root_cause:
+          type: string
+          nullable: true
+        solution:
+          type: string
+          nullable: true
+        runbook_id:
+          type: string
+          format: uuid
+          nullable: true
+        rank:
+          type: number
+          format: float
+          description: Full-text search rank score
+        title_highlight:
+          type: string
+          description: Title with search term highlights
+        symptoms_highlight:
+          type: string
+          description: Symptoms with search term highlights
+        solution_highlight:
+          type: string
+          description: Solution with search term highlights
+        resolution_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    IncidentSearchResponse:
+      type: object
+      required: [query, results, count]
+      properties:
+        query:
+          type: string
+          example: CrashLoopBackOff
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncidentSearchResult"
+        count:
+          type: integer
+
+    IncidentPage:
+      type: object
+      required: [items, page, page_size, total_items, total_pages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Incident"
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 25
+        total_items:
+          type: integer
+          example: 42
+        total_pages:
+          type: integer
+          example: 2
+
+    # ── Alerts ──────────────────────────────────────────────────────
+    Alert:
+      type: object
+      required: [id, fingerprint, status, severity, source, title, labels, annotations, occurrence_count, first_fired_at, last_fired_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fingerprint:
+          type: string
+          example: a]b1c2d3e4f5
+        status:
+          type: string
+          enum: [firing, acknowledged, resolved]
+        severity:
+          type: string
+          enum: [info, warning, critical, major]
+        source:
+          type: string
+          example: alertmanager
+        title:
+          type: string
+          example: KubePodCrashLooping
+        description:
+          type: string
+          nullable: true
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            alertname: KubePodCrashLooping
+            namespace: default
+            pod: api-gateway-7f8b9c6d4-x2k9m
+        annotations:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            summary: Pod is crash looping
+        matched_incident_id:
+          type: string
+          format: uuid
+          nullable: true
+        suggested_solution:
+          type: string
+          nullable: true
+        occurrence_count:
+          type: integer
+        first_fired_at:
+          type: string
+          format: date-time
+        last_fired_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    AlertListResponse:
+      type: object
+      required: [alerts, count]
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+        count:
+          type: integer
+
+    # ── Webhooks ────────────────────────────────────────────────────
+    AlertmanagerPayload:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "4"
+        groupKey:
+          type: string
+        status:
+          type: string
+          enum: [firing, resolved]
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [firing, resolved]
+              labels:
+                type: object
+                additionalProperties:
+                  type: string
+                example:
+                  alertname: KubePodCrashLooping
+                  severity: critical
+                  namespace: default
+              annotations:
+                type: object
+                additionalProperties:
+                  type: string
+                example:
+                  summary: Pod is crash looping
+              startsAt:
+                type: string
+                format: date-time
+              endsAt:
+                type: string
+                format: date-time
+              fingerprint:
+                type: string
+
+    KeepPayload:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: HighMemoryUsage
+        status:
+          type: string
+        severity:
+          type: string
+        source:
+          type: array
+          items:
+            type: string
+        fingerprint:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        description:
+          type: string
+
+    GenericWebhookPayload:
+      type: object
+      properties:
+        title:
+          type: string
+          example: High CPU Usage on worker-node-3
+        severity:
+          type: string
+          enum: [info, warning, critical, major]
+        fingerprint:
+          type: string
+        description:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        source:
+          type: string
+          example: custom-monitor
+        agent_metadata:
+          type: object
+          properties:
+            agent_id:
+              type: string
+            action_taken:
+              type: string
+            action_result:
+              type: string
+            auto_resolved:
+              type: boolean
+            confidence:
+              type: number
+              format: float
+
+    WebhookBatchResponse:
+      type: object
+      required: [alerts_processed, alerts]
+      properties:
+        alerts_processed:
+          type: integer
+          example: 2
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+
+    # ── Runbooks ────────────────────────────────────────────────────
+    RunbookCreateRequest:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          example: CrashLoopBackOff Remediation
+        content:
+          type: string
+          example: |
+            ## Steps
+            1. Check pod logs: `kubectl logs <pod> -n <namespace>`
+            2. Check events: `kubectl describe pod <pod> -n <namespace>`
+            3. Review resource limits
+        category:
+          type: string
+          nullable: true
+          example: kubernetes
+        tags:
+          type: array
+          items:
+            type: string
+          example: [k8s, pod, crashloop]
+
+    RunbookUpdateRequest:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          minLength: 3
+        content:
+          type: string
+        category:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+
+    Runbook:
+      type: object
+      required: [id, title, content, is_template, tags, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: CrashLoopBackOff Remediation
+        content:
+          type: string
+        category:
+          type: string
+          nullable: true
+        is_template:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RunbookPage:
+      type: object
+      required: [items, page, page_size, total_items, total_pages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Runbook"
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_items:
+          type: integer
+        total_pages:
+          type: integer
+
+    # ── Rosters ─────────────────────────────────────────────────────
+    RosterCreateRequest:
+      type: object
+      required: [name, timezone, rotation_type, rotation_length, handoff_time, start_date]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          example: Platform Team APAC
+        description:
+          type: string
+          nullable: true
+          example: APAC timezone coverage for platform team
+        timezone:
+          type: string
+          example: Australia/Sydney
+        rotation_type:
+          type: string
+          enum: [daily, weekly, custom]
+        rotation_length:
+          type: integer
+          minimum: 1
+          example: 7
+        handoff_time:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          example: "09:00"
+        is_follow_the_sun:
+          type: boolean
+          default: false
+        linked_roster_id:
+          type: string
+          format: uuid
+          nullable: true
+        escalation_policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          example: "2026-01-06"
+
+    RosterUpdateRequest:
+      type: object
+      required: [name, timezone, rotation_type, rotation_length, handoff_time, start_date]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        description:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+        rotation_type:
+          type: string
+          enum: [daily, weekly, custom]
+        rotation_length:
+          type: integer
+          minimum: 1
+        handoff_time:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+        is_follow_the_sun:
+          type: boolean
+        linked_roster_id:
+          type: string
+          format: uuid
+          nullable: true
+        escalation_policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        start_date:
+          type: string
+          format: date
+
+    Roster:
+      type: object
+      required: [id, name, timezone, rotation_type, rotation_length, handoff_time, is_follow_the_sun, start_date, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Platform Team APAC
+        description:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          example: Australia/Sydney
+        rotation_type:
+          type: string
+          enum: [daily, weekly, custom]
+        rotation_length:
+          type: integer
+        handoff_time:
+          type: string
+          example: "09:00"
+        is_follow_the_sun:
+          type: boolean
+        linked_roster_id:
+          type: string
+          format: uuid
+          nullable: true
+        escalation_policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        start_date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RosterListResponse:
+      type: object
+      required: [rosters, count]
+      properties:
+        rosters:
+          type: array
+          items:
+            $ref: "#/components/schemas/Roster"
+        count:
+          type: integer
+
+    AddMemberRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          minimum: 0
+          default: 0
+
+    RosterMember:
+      type: object
+      required: [id, roster_id, user_id, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        roster_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+
+    MemberListResponse:
+      type: object
+      required: [members, count]
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterMember"
+        count:
+          type: integer
+
+    CreateOverrideRequest:
+      type: object
+      required: [user_id, start_at, end_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          nullable: true
+          example: Covering for Alice during PTO
+
+    RosterOverride:
+      type: object
+      required: [id, roster_id, user_id, start_at, end_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        roster_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    OverrideListResponse:
+      type: object
+      required: [overrides, count]
+      properties:
+        overrides:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterOverride"
+        count:
+          type: integer
+
+    OnCallResponse:
+      type: object
+      description: |
+        When someone is on call, all fields are populated.
+        When no one is on call, returns `{"on_call": null, "message": "..."}`.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        roster_id:
+          type: string
+          format: uuid
+        roster_name:
+          type: string
+        is_override:
+          type: boolean
+        shift_start:
+          type: string
+          format: date-time
+        shift_end:
+          type: string
+          format: date-time
+
+    # ── Escalation Policies ─────────────────────────────────────────
+    EscalationTier:
+      type: object
+      required: [tier, timeout_minutes, notify_via, targets]
+      properties:
+        tier:
+          type: integer
+          example: 1
+        timeout_minutes:
+          type: integer
+          example: 15
+        notify_via:
+          type: array
+          items:
+            type: string
+            enum: [slack_dm, phone, sms, slack_channel]
+          example: [slack_dm, phone]
+        targets:
+          type: array
+          items:
+            type: string
+          description: "Target identifiers: oncall_primary, oncall_backup, team_lead, or user:<uuid>"
+          example: [oncall_primary]
+
+    EscalationPolicyCreateRequest:
+      type: object
+      required: [name, tiers]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          example: Critical Alert Policy
+        description:
+          type: string
+          nullable: true
+          example: Escalation for critical production alerts
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EscalationTier"
+          minItems: 1
+        repeat_count:
+          type: integer
+          nullable: true
+          minimum: 0
+          example: 2
+
+    EscalationPolicyUpdateRequest:
+      type: object
+      required: [name, tiers]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        description:
+          type: string
+          nullable: true
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EscalationTier"
+          minItems: 1
+        repeat_count:
+          type: integer
+          nullable: true
+          minimum: 0
+
+    EscalationPolicy:
+      type: object
+      required: [id, name, tiers, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Critical Alert Policy
+        description:
+          type: string
+          nullable: true
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EscalationTier"
+        repeat_count:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EscalationPolicyListResponse:
+      type: object
+      required: [policies, count]
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/EscalationPolicy"
+        count:
+          type: integer
+
+    DryRunRequest:
+      type: object
+      required: [alert_title, alert_severity]
+      properties:
+        alert_title:
+          type: string
+          example: KubePodCrashLooping
+        alert_severity:
+          type: string
+          enum: [info, warning, critical, major]
+          example: critical
+
+    DryRunStep:
+      type: object
+      required: [tier, timeout_minutes, cumulative_minutes, notify_via, targets, action]
+      properties:
+        tier:
+          type: integer
+        timeout_minutes:
+          type: integer
+        cumulative_minutes:
+          type: integer
+        notify_via:
+          type: array
+          items:
+            type: string
+        targets:
+          type: array
+          items:
+            type: string
+        action:
+          type: string
+          example: notify
+
+    DryRunResponse:
+      type: object
+      required: [policy_id, policy_name, steps, total_time_minutes]
+      properties:
+        policy_id:
+          type: string
+          format: uuid
+        policy_name:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DryRunStep"
+        total_time_minutes:
+          type: integer
+
+    EscalationEvent:
+      type: object
+      required: [id, alert_id, policy_id, tier, action, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        alert_id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+          format: uuid
+        tier:
+          type: integer
+        action:
+          type: string
+          example: notified
+        target_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        notify_method:
+          type: string
+          nullable: true
+          example: slack_dm
+        notify_result:
+          type: string
+          nullable: true
+          example: delivered
+        created_at:
+          type: string
+          format: date-time
+
+    EscalationEventListResponse:
+      type: object
+      required: [events, count]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EscalationEvent"
+        count:
+          type: integer
+
+    # ── Users ───────────────────────────────────────────────────────
+    UserCreateRequest:
+      type: object
+      required: [email, display_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        display_name:
+          type: string
+          minLength: 2
+          example: Alice Chen
+        role:
+          type: string
+          enum: [admin, user, viewer]
+          example: user
+        timezone:
+          type: string
+          example: America/New_York
+        phone:
+          type: string
+          nullable: true
+          example: "+15551234567"
+        slack_user_id:
+          type: string
+          nullable: true
+          example: U0123456789
+
+    UserUpdateRequest:
+      type: object
+      required: [email, display_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+          minLength: 2
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        timezone:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        slack_user_id:
+          type: string
+          nullable: true
+
+    User:
+      type: object
+      required: [id, email, display_name, role, timezone, is_active, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        display_name:
+          type: string
+          example: Alice Chen
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        timezone:
+          type: string
+          example: America/New_York
+        phone:
+          type: string
+          nullable: true
+        slack_user_id:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserListResponse:
+      type: object
+      required: [users, count]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        count:
+          type: integer
+
+    # ── API Keys ────────────────────────────────────────────────────
+    ApiKeyCreateRequest:
+      type: object
+      required: [description, role]
+      properties:
+        description:
+          type: string
+          example: CI/CD pipeline key
+        role:
+          type: string
+          enum: [admin, user, viewer]
+          example: user
+
+    ApiKey:
+      type: object
+      required: [id, key_prefix, description, role, scopes, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key_prefix:
+          type: string
+          example: ow_abc12...
+        description:
+          type: string
+          example: CI/CD pipeline key
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        scopes:
+          type: array
+          items:
+            type: string
+        last_used:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ApiKeyCreateResponse:
+      description: Returned only on creation — includes the raw key
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          required: [raw_key]
+          properties:
+            raw_key:
+              type: string
+              description: The full API key. Store it securely — it cannot be retrieved again.
+              example: ow_abc123def456ghi789jkl012mno345pqr678
+
+    ApiKeyListResponse:
+      type: object
+      required: [keys, count]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKey"
+        count:
+          type: integer
+
+    # ── Tenant Config ───────────────────────────────────────────────
+    TenantConfigUpdateRequest:
+      type: object
+      required: [default_timezone]
+      properties:
+        slack_workspace_url:
+          type: string
+          example: https://acme-corp.slack.com
+        slack_channel:
+          type: string
+          example: "#ops-alerts"
+        twilio_sid:
+          type: string
+        twilio_phone_number:
+          type: string
+          example: "+15559876543"
+        default_timezone:
+          type: string
+          example: America/New_York
+
+    TenantConfig:
+      type: object
+      required: [default_timezone, updated_at]
+      properties:
+        slack_workspace_url:
+          type: string
+        slack_channel:
+          type: string
+        twilio_sid:
+          type: string
+        twilio_phone_number:
+          type: string
+        default_timezone:
+          type: string
+          example: America/New_York
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── Audit Log ───────────────────────────────────────────────────
+    AuditEntry:
+      type: object
+      required: [id, action, resource, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        api_key_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+          example: create
+        resource:
+          type: string
+          example: incident
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        detail:
+          type: object
+          additionalProperties: true
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+          example: 192.168.1.100
+        user_agent:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
