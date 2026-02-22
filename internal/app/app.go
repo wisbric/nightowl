@@ -27,6 +27,7 @@ import (
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
+	"github.com/wisbric/nightowl/pkg/tenantconfig"
 	"github.com/wisbric/nightowl/pkg/user"
 )
 
@@ -152,6 +153,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
+
+	tenantConfigHandler := tenantconfig.NewHandler(logger, auditWriter, db)
+	srv.APIRouter.Mount("/admin/config", tenantConfigHandler.Routes())
 
 	// Slack routes (outside auth middleware — verified by Slack signing secret).
 	slackNotifier := nightowlslack.NewNotifier(cfg.SlackBotToken, cfg.SlackAlertChannel, logger)

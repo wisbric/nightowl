@@ -39,15 +39,17 @@ export function AdminPage() {
             </CardContent>
           </Card>
         </Link>
-        <Card className="opacity-75">
-          <CardContent className="flex items-center gap-3 p-4">
-            <Settings className="h-8 w-8 text-muted-foreground" />
-            <div>
-              <p className="font-medium">Configuration</p>
-              <p className="text-xs text-muted-foreground">Coming soon</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link to="/admin/config">
+          <Card className="cursor-pointer hover:border-accent transition-colors">
+            <CardContent className="flex items-center gap-3 p-4">
+              <Settings className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Configuration</p>
+                <p className="text-xs text-muted-foreground">Tenant settings</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
         <Link to="/admin/audit-log">
           <Card className="cursor-pointer hover:border-accent transition-colors">
             <CardContent className="flex items-center gap-3 p-4">

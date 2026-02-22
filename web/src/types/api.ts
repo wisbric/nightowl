@@ -272,3 +272,12 @@ export interface ApiKeyDetail {
 export interface ApiKeyCreateResponse extends ApiKeyDetail {
   raw_key: string;
 }
+
+export interface TenantConfigResponse {
+  slack_workspace_url: string;
+  slack_channel: string;
+  twilio_sid: string;
+  twilio_phone_number: string;
+  default_timezone: string;
+  updated_at: string;
+}
