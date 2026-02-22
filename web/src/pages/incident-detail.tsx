@@ -12,6 +12,7 @@ import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Incident, IncidentHistoryEntry } from "@/types/api";
 import { useState } from "react";
@@ -105,7 +106,7 @@ export function IncidentDetailPage() {
     mergeMutation.mutate(trimmed);
   }
 
-  if (!isNew && isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (!isNew && isLoading) return <LoadingSpinner size="lg" />;
 
   return (
     <div className="space-y-6">

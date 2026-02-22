@@ -5,6 +5,8 @@ import { useTitle } from "@/hooks/use-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PoliciesResponse } from "@/types/api";
 import { ArrowUpCircle } from "lucide-react";
@@ -26,7 +28,12 @@ export function EscalationListPage() {
         <CardHeader><CardTitle>All Policies</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : policies.length === 0 ? (
+            <EmptyState
+              title="No escalation policies"
+              description="Define policies to automate alert routing and notifications."
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -59,11 +66,6 @@ export function EscalationListPage() {
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatRelativeTime(policy.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {policies.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No escalation policies</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

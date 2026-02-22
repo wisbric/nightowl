@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { RunbooksResponse } from "@/types/api";
 
@@ -50,7 +52,24 @@ export function RunbookListPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : runbooks.length === 0 ? (
+            categoryFilter ? (
+              <EmptyState
+                title="No matching runbooks"
+                description="No runbooks in this category. Try a different filter."
+              />
+            ) : (
+              <EmptyState
+                title="No runbooks yet"
+                description="Create runbooks to document procedures for your team."
+                action={
+                  <Link to="/runbooks/$runbookId" params={{ runbookId: "new" }}>
+                    <Button>Create Runbook</Button>
+                  </Link>
+                }
+              />
+            )
           ) : (
             <Table>
               <TableHeader>
@@ -84,11 +103,6 @@ export function RunbookListPage() {
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(runbook.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {runbooks.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No runbooks found</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

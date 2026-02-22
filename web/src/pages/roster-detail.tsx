@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Roster, OnCallResponse, MembersResponse, OverridesResponse } from "@/types/api";
 import { Calendar, Trash2 } from "lucide-react";
@@ -250,7 +251,7 @@ export function RosterDetailPage() {
     );
   }
 
-  if (isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (isLoading) return <LoadingSpinner size="lg" />;
   if (!roster) return <p className="text-muted-foreground">Roster not found</p>;
 
   return (

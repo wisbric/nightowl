@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { AuditEntry } from "@/types/api";
 import { Search } from "lucide-react";
@@ -48,7 +50,19 @@ export function AuditLogPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : (entries ?? []).length === 0 ? (
+            search ? (
+              <EmptyState
+                title="No matching entries"
+                description="No audit entries match your filter."
+              />
+            ) : (
+              <EmptyState
+                title="No audit entries"
+                description="Activity will be recorded as your team uses NightOwl."
+              />
+            )
           ) : (
             <Table>
               <TableHeader>
@@ -75,11 +89,6 @@ export function AuditLogPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {(entries ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No audit entries</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

@@ -5,6 +5,8 @@ import { useTitle } from "@/hooks/use-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { RostersResponse } from "@/types/api";
 import { Clock, Globe, Calendar, Plus } from "lucide-react";
 
@@ -37,7 +39,17 @@ export function RosterListPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : rosters.length === 0 ? (
+            <EmptyState
+              title="No rosters configured"
+              description="Set up your first on-call roster to manage schedules."
+              action={
+                <Link to="/rosters/$rosterId" params={{ rosterId: "new" }}>
+                  <Button>Create Roster</Button>
+                </Link>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -76,11 +88,6 @@ export function RosterListPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {rosters.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No rosters configured</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

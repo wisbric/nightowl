@@ -8,6 +8,8 @@ import { Select } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { AlertsResponse } from "@/types/api";
 
@@ -52,7 +54,19 @@ export function AlertListPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : alerts.length === 0 ? (
+            (statusFilter || severityFilter) ? (
+              <EmptyState
+                title="No matching alerts"
+                description="Try adjusting the status or severity filters."
+              />
+            ) : (
+              <EmptyState
+                title="No alerts firing"
+                description="All clear. Alerts from webhooks will appear here."
+              />
+            )
           ) : (
             <Table>
               <TableHeader>
@@ -80,11 +94,6 @@ export function AlertListPage() {
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(alert.first_fired_at)}</TableCell>
                   </TableRow>
                 ))}
-                {alerts.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No alerts found</TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

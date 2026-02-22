@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Incident, IncidentsResponse, SearchResponse, SearchResult } from "@/types/api";
 import { Search } from "lucide-react";
@@ -95,7 +97,24 @@ export function IncidentListPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : rows.length === 0 ? (
+            isSearch ? (
+              <EmptyState
+                title="No matching incidents"
+                description="No incidents match your search. Try different keywords."
+              />
+            ) : (
+              <EmptyState
+                title="Knowledge base is empty"
+                description="Create your first incident to build operational knowledge."
+                action={
+                  <Link to="/incidents/$incidentId" params={{ incidentId: "new" }}>
+                    <Button>New Incident</Button>
+                  </Link>
+                }
+              />
+            )
           ) : (
             <Table>
               <TableHeader>
@@ -145,13 +164,6 @@ export function IncidentListPage() {
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(inc.updated_at)}</TableCell>
                   </TableRow>
                 ))}
-                {rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      {isSearch ? "No matching incidents" : "No incidents found"}
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

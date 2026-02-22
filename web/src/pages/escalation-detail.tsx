@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { EscalationPolicy, DryRunResponse } from "@/types/api";
 import { useState } from "react";
@@ -172,7 +173,7 @@ export function EscalationDetailPage() {
     }));
   }
 
-  if (!isNew && isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (!isNew && isLoading) return <LoadingSpinner size="lg" />;
 
   if (deleteMutation.isSuccess) {
     return (

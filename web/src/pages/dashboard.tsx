@@ -6,6 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { OwlIcon } from "@/components/ui/owl-icon";
 import { Link } from "@tanstack/react-router";
 import { formatRelativeTime } from "@/lib/utils";
 import type { AlertsResponse, IncidentsResponse, OnCallResponse, Roster, RostersResponse } from "@/types/api";
@@ -22,7 +25,7 @@ function OnCallRow({ roster }: { roster: Roster }) {
       <span className="text-muted-foreground text-xs">({roster.timezone})</span>
       <span className="ml-auto flex items-center gap-2">
         {isLoading ? (
-          <span className="text-xs text-muted-foreground">Loading...</span>
+          <LoadingSpinner size="sm" label="" className="py-0" />
         ) : data?.on_call ? (
           <>
             {data.on_call.is_override && (
@@ -40,7 +43,12 @@ function OnCallRow({ roster }: { roster: Roster }) {
 
 function OnCallWidget({ rosters }: { rosters: Roster[] }) {
   if (rosters.length === 0) {
-    return <p className="mt-1 text-sm text-muted-foreground">No rosters configured</p>;
+    return (
+      <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+        <OwlIcon className="h-5 w-5 opacity-40" />
+        <span>No rosters configured</span>
+      </div>
+    );
   }
 
   return (
@@ -148,7 +156,11 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             {activeAlerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active alerts</p>
+              <EmptyState
+                title="No active alerts"
+                description="All clear right now."
+                className="py-6"
+              />
             ) : (
               <ul className="space-y-2">
                 {activeAlerts.slice(0, 8).map((a) => (
@@ -167,12 +179,18 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {incidents.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Incidents</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Incidents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {incidents.length === 0 ? (
+            <EmptyState
+              title="No incidents yet"
+              description="Incidents from your knowledge base will appear here."
+              className="py-6"
+            />
+          ) : (
             <ul className="space-y-2">
               {incidents.map((inc) => (
                 <li key={inc.id}>
@@ -184,9 +202,9 @@ export function DashboardPage() {
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

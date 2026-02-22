@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Runbook } from "@/types/api";
 
@@ -71,7 +72,7 @@ export function RunbookDetailPage() {
     },
   });
 
-  if (!isNew && isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (!isNew && isLoading) return <LoadingSpinner size="lg" />;
 
   return (
     <div className="space-y-6">

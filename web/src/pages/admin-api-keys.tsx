@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { ApiKeysResponse, ApiKeyCreateResponse } from "@/types/api";
 import { Plus, Trash2, Copy, AlertTriangle } from "lucide-react";
@@ -105,7 +107,15 @@ export function AdminApiKeysPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : keys.length === 0 ? (
+            <EmptyState
+              title="No API keys"
+              description="Create an API key to integrate external tools."
+              action={
+                <Button size="sm" onClick={openCreate}>Create Key</Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -143,13 +153,6 @@ export function AdminApiKeysPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {keys.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No API keys found
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

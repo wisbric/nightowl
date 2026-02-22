@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Alert } from "@/types/api";
 
@@ -37,7 +38,7 @@ export function AlertDetailPage() {
     },
   });
 
-  if (isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (isLoading) return <LoadingSpinner size="lg" />;
   if (!alert) return <p className="text-muted-foreground">Alert not found</p>;
 
   return (

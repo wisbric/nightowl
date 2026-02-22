@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { UsersResponse, UserDetail } from "@/types/api";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -124,7 +126,15 @@ export function AdminUsersPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <LoadingSpinner />
+          ) : users.length === 0 ? (
+            <EmptyState
+              title="No team members"
+              description="Invite your first team member to get started."
+              action={
+                <Button size="sm" onClick={openCreate}>Invite User</Button>
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -173,13 +183,6 @@ export function AdminUsersPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {users.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      No users found
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}

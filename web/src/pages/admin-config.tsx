@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { TenantConfigResponse } from "@/types/api";
 import { Check } from "lucide-react";
 
@@ -97,7 +98,7 @@ export function AdminConfigPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
+                <LoadingSpinner size="sm" />
               ) : (
                 <>
                   <div>
@@ -134,7 +135,7 @@ export function AdminConfigPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
+                <LoadingSpinner size="sm" />
               ) : (
                 <>
                   <div>
@@ -171,7 +172,7 @@ export function AdminConfigPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
+                <LoadingSpinner size="sm" />
               ) : (
                 <div className="max-w-sm">
                   <label className="text-sm font-medium">Default Timezone</label>
