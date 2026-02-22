@@ -2,9 +2,11 @@
 
 ## 1. Schema Strategy
 
-- `public` schema: global tables (tenants, API keys, system config)
+- `public` schema: global tables (tenants, API keys)
 - `tenant_<slug>` schema: all tenant-specific data
 - Migrations run per-schema using `golang-migrate`
+- Global migrations: `migrations/global/` (2 migrations)
+- Tenant migrations: `migrations/tenant/` (15 migrations)
 
 ## 2. Global Tables (public schema)
 
@@ -31,11 +33,11 @@ CREATE INDEX idx_tenants_slug ON public.tenants(slug);
 CREATE TABLE public.api_keys (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-    key_hash    TEXT NOT NULL UNIQUE,  -- bcrypt or SHA-256 of the key
+    key_hash    TEXT NOT NULL UNIQUE,  -- SHA-256 of the raw key
     key_prefix  TEXT NOT NULL,         -- first 8 chars for identification
     description TEXT NOT NULL DEFAULT '',
-    role        TEXT NOT NULL DEFAULT 'engineer',  -- admin, manager, engineer, readonly, webhook
-    scopes      TEXT[] NOT NULL DEFAULT '{}',       -- optional: restrict to specific endpoints
+    role        TEXT NOT NULL DEFAULT 'engineer',  -- admin, manager, engineer, readonly
+    scopes      TEXT[] NOT NULL DEFAULT '{}',
     last_used   TIMESTAMPTZ,
     expires_at  TIMESTAMPTZ,          -- NULL = no expiry
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -47,7 +49,9 @@ CREATE INDEX idx_api_keys_hash ON public.api_keys(key_hash);
 
 ## 3. Tenant Tables (per tenant_<slug> schema)
 
-### 3.1 users (tenant members)
+### 3.1 users
+
+Migration: `000001_create_users`
 
 ```sql
 CREATE TABLE users (
@@ -55,7 +59,7 @@ CREATE TABLE users (
     external_id     TEXT NOT NULL UNIQUE,  -- OIDC subject claim
     email           TEXT NOT NULL,
     display_name    TEXT NOT NULL,
-    timezone        TEXT NOT NULL DEFAULT 'UTC',  -- IANA timezone (e.g., 'Pacific/Auckland', 'Europe/Berlin')
+    timezone        TEXT NOT NULL DEFAULT 'UTC',  -- IANA timezone
     phone           TEXT,                          -- E.164 format for callout
     slack_user_id   TEXT,                          -- Slack user ID for DMs
     role            TEXT NOT NULL DEFAULT 'engineer',
@@ -68,112 +72,98 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_external_id ON users(external_id);
 ```
 
-### 3.2 services (service catalogue)
+### 3.2 services
+
+Migration: `000002_create_services`
 
 ```sql
 CREATE TABLE services (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        TEXT NOT NULL,           -- e.g., "customer-api", "etcd", "ingress-controller"
-    cluster     TEXT,                    -- Kubernetes cluster name
-    namespace   TEXT,                    -- Kubernetes namespace
+    name        TEXT NOT NULL,
+    cluster     TEXT,
+    namespace   TEXT,
     description TEXT,
-    owner_id    UUID REFERENCES users(id),  -- team/person responsible
+    owner_id    UUID REFERENCES users(id),
     tier        TEXT DEFAULT 'standard',    -- critical, standard, best-effort
-    metadata    JSONB DEFAULT '{}',         -- flexible: labels, annotations, links
+    metadata    JSONB DEFAULT '{}',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(name, cluster, namespace)
 );
 ```
 
-### 3.3 alerts
+### 3.3 escalation_policies
+
+Migration: `000003_create_escalation_policies`
 
 ```sql
-CREATE TABLE alerts (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    fingerprint     TEXT NOT NULL,         -- dedup key (hash of alert identity labels)
-    status          TEXT NOT NULL DEFAULT 'firing',  -- firing, acknowledged, investigating, resolved
-    severity        TEXT NOT NULL DEFAULT 'warning', -- info, warning, critical, major
-    source          TEXT NOT NULL,          -- alertmanager, keep, generic, agent
-    title           TEXT NOT NULL,
-    description     TEXT,
-    labels          JSONB NOT NULL DEFAULT '{}',     -- all alert labels
-    annotations     JSONB NOT NULL DEFAULT '{}',     -- all alert annotations
-    service_id      UUID REFERENCES services(id),
-    
-    -- Enrichment from knowledge base
-    matched_incident_id UUID REFERENCES incidents(id),
-    suggested_solution  TEXT,
-    
-    -- Resolution
-    acknowledged_by UUID REFERENCES users(id),
-    acknowledged_at TIMESTAMPTZ,
-    resolved_by     UUID REFERENCES users(id),  -- NULL if resolved by source (auto-resolve)
-    resolved_at     TIMESTAMPTZ,
-    resolved_by_agent BOOLEAN DEFAULT false,     -- true if resolved by automated agent
-    agent_resolution_notes TEXT,                  -- what the agent did
-    
-    -- Dedup tracking
-    occurrence_count INTEGER NOT NULL DEFAULT 1,
-    first_fired_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_fired_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    
-    -- Escalation
-    escalation_policy_id UUID REFERENCES escalation_policies(id),
-    current_escalation_tier INTEGER DEFAULT 0,
-    
+CREATE TABLE escalation_policies (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        TEXT NOT NULL,
+    description TEXT,
+    tiers       JSONB NOT NULL,
+    -- tiers format:
+    -- [
+    --   { "tier": 1, "timeout_minutes": 5, "notify_via": ["slack_dm"], "targets": ["oncall_primary"] },
+    --   { "tier": 2, "timeout_minutes": 10, "notify_via": ["slack_dm", "phone"], "targets": ["oncall_backup"] },
+    --   { "tier": 3, "timeout_minutes": 15, "notify_via": ["phone", "slack_channel"], "targets": ["team_lead"] }
+    -- ]
+    repeat_count    INTEGER DEFAULT 0,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_alerts_fingerprint ON alerts(fingerprint);
-CREATE INDEX idx_alerts_status ON alerts(status) WHERE status != 'resolved';
-CREATE INDEX idx_alerts_severity ON alerts(severity);
-CREATE INDEX idx_alerts_created ON alerts(created_at DESC);
-CREATE INDEX idx_alerts_service ON alerts(service_id);
-CREATE INDEX idx_alerts_labels ON alerts USING GIN(labels);
 ```
 
-### 3.4 incidents (knowledge base)
+### 3.4 runbooks
+
+Migration: `000004_create_runbooks`
+
+```sql
+CREATE TABLE runbooks (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title       TEXT NOT NULL,
+    content     TEXT NOT NULL,          -- markdown
+    category    TEXT,
+    is_template BOOLEAN DEFAULT false,
+    tags        TEXT[] DEFAULT '{}',
+    created_by  UUID REFERENCES users(id),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_runbooks_category ON runbooks(category);
+CREATE INDEX idx_runbooks_template ON runbooks(is_template) WHERE is_template = true;
+```
+
+### 3.5 incidents
+
+Migration: `000005_create_incidents`
 
 ```sql
 CREATE TABLE incidents (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title           TEXT NOT NULL,
-    fingerprints    TEXT[] NOT NULL DEFAULT '{}',  -- one or more fingerprints that match this incident
-    
-    -- Classification
-    severity        TEXT NOT NULL DEFAULT 'warning',
-    category        TEXT,                           -- e.g., "networking", "storage", "compute", "application"
-    tags            TEXT[] NOT NULL DEFAULT '{}',
-    
-    -- Affected scope
-    services        TEXT[] NOT NULL DEFAULT '{}',   -- service names
-    clusters        TEXT[] NOT NULL DEFAULT '{}',   -- cluster names
-    namespaces      TEXT[] NOT NULL DEFAULT '{}',
-    
-    -- Knowledge
-    symptoms        TEXT,              -- what the alert/issue looks like
-    error_patterns  TEXT[] DEFAULT '{}', -- regex or exact strings that match
-    root_cause      TEXT,
-    solution        TEXT,              -- markdown
-    runbook_id      UUID REFERENCES runbooks(id),
-    
-    -- Resolution tracking
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title               TEXT NOT NULL,
+    fingerprints        TEXT[] NOT NULL DEFAULT '{}',
+    severity            TEXT NOT NULL DEFAULT 'warning',
+    category            TEXT,
+    tags                TEXT[] NOT NULL DEFAULT '{}',
+    services            TEXT[] NOT NULL DEFAULT '{}',
+    clusters            TEXT[] NOT NULL DEFAULT '{}',
+    namespaces          TEXT[] NOT NULL DEFAULT '{}',
+    symptoms            TEXT,
+    error_patterns      TEXT[] DEFAULT '{}',
+    root_cause          TEXT,
+    solution            TEXT,
+    runbook_id          UUID REFERENCES runbooks(id),
     resolution_count    INTEGER NOT NULL DEFAULT 0,
     last_resolved_at    TIMESTAMPTZ,
     last_resolved_by    UUID REFERENCES users(id),
     avg_resolution_mins FLOAT,
-    
-    -- Merge tracking
-    merged_into_id  UUID REFERENCES incidents(id),  -- NULL unless merged
-    
-    -- Full-text search
-    search_vector   TSVECTOR,
-    
-    created_by      UUID REFERENCES users(id),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    merged_into_id      UUID REFERENCES incidents(id),
+    search_vector       TSVECTOR,
+    created_by          UUID REFERENCES users(id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_incidents_fingerprints ON incidents USING GIN(fingerprints);
@@ -181,12 +171,16 @@ CREATE INDEX idx_incidents_search ON incidents USING GIN(search_vector);
 CREATE INDEX idx_incidents_tags ON incidents USING GIN(tags);
 CREATE INDEX idx_incidents_severity ON incidents(severity);
 CREATE INDEX idx_incidents_merged ON incidents(merged_into_id) WHERE merged_into_id IS NOT NULL;
+```
 
--- Auto-update search vector
+**Full-text search trigger** (updated by migration `000014` to include `category`):
+
+```sql
 CREATE OR REPLACE FUNCTION update_incident_search_vector() RETURNS TRIGGER AS $$
 BEGIN
     NEW.search_vector :=
         setweight(to_tsvector('english', COALESCE(NEW.title, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(NEW.category, '')), 'A') ||
         setweight(to_tsvector('english', COALESCE(NEW.symptoms, '')), 'B') ||
         setweight(to_tsvector('english', COALESCE(NEW.root_cause, '')), 'B') ||
         setweight(to_tsvector('english', COALESCE(NEW.solution, '')), 'C') ||
@@ -202,7 +196,9 @@ CREATE TRIGGER trg_incidents_search_vector
     FOR EACH ROW EXECUTE FUNCTION update_incident_search_vector();
 ```
 
-### 3.5 incident_history (version tracking)
+### 3.6 incident_history
+
+Migration: `000006_create_incident_history`
 
 ```sql
 CREATE TABLE incident_history (
@@ -210,58 +206,82 @@ CREATE TABLE incident_history (
     incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
     changed_by  UUID REFERENCES users(id),
     change_type TEXT NOT NULL,  -- created, updated, merged, resolution_added
-    diff        JSONB NOT NULL, -- { field: { old: ..., new: ... } }
+    diff        JSONB NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_incident_history_incident ON incident_history(incident_id, created_at DESC);
 ```
 
-### 3.6 runbooks
+### 3.7 alerts
+
+Migration: `000007_create_alerts`
 
 ```sql
-CREATE TABLE runbooks (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title       TEXT NOT NULL,
-    content     TEXT NOT NULL,          -- markdown
-    category    TEXT,                    -- e.g., "kubernetes", "database", "networking"
-    is_template BOOLEAN DEFAULT false,  -- pre-seeded templates
-    tags        TEXT[] DEFAULT '{}',
-    created_by  UUID REFERENCES users(id),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE alerts (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    fingerprint             TEXT NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'firing',
+    severity                TEXT NOT NULL DEFAULT 'warning',
+    source                  TEXT NOT NULL,
+    title                   TEXT NOT NULL,
+    description             TEXT,
+    labels                  JSONB NOT NULL DEFAULT '{}',
+    annotations             JSONB NOT NULL DEFAULT '{}',
+    service_id              UUID REFERENCES services(id),
+    matched_incident_id     UUID REFERENCES incidents(id),
+    suggested_solution      TEXT,
+    acknowledged_by         UUID REFERENCES users(id),
+    acknowledged_at         TIMESTAMPTZ,
+    resolved_by             UUID REFERENCES users(id),
+    resolved_at             TIMESTAMPTZ,
+    resolved_by_agent       BOOLEAN DEFAULT false,
+    agent_resolution_notes  TEXT,
+    occurrence_count        INTEGER NOT NULL DEFAULT 1,
+    first_fired_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_fired_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    escalation_policy_id    UUID REFERENCES escalation_policies(id),
+    current_escalation_tier INTEGER DEFAULT 0,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_runbooks_category ON runbooks(category);
-CREATE INDEX idx_runbooks_template ON runbooks(is_template) WHERE is_template = true;
+CREATE INDEX idx_alerts_fingerprint ON alerts(fingerprint);
+CREATE INDEX idx_alerts_status ON alerts(status) WHERE status != 'resolved';
+CREATE INDEX idx_alerts_severity ON alerts(severity);
+CREATE INDEX idx_alerts_created ON alerts(created_at DESC);
+CREATE INDEX idx_alerts_service ON alerts(service_id);
+CREATE INDEX idx_alerts_labels ON alerts USING GIN(labels);
 ```
 
-### 3.7 rosters (on-call schedules)
+### 3.8 rosters
+
+Migration: `000008_create_rosters` + `000015_add_roster_end_date`
 
 ```sql
 CREATE TABLE rosters (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            TEXT NOT NULL,          -- e.g., "EMEA Primary", "APAC Primary"
-    description     TEXT,
-    timezone        TEXT NOT NULL,          -- primary timezone for display
-    rotation_type   TEXT NOT NULL,          -- daily, weekly, custom
-    rotation_length INTEGER NOT NULL DEFAULT 7,  -- days per rotation
-    handoff_time    TIME NOT NULL DEFAULT '09:00', -- local time in roster timezone
-    
-    -- Follow-the-sun config
-    is_follow_the_sun BOOLEAN DEFAULT false,
-    linked_roster_id  UUID REFERENCES rosters(id),  -- paired roster for follow-the-sun
-    
-    -- Escalation
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                 TEXT NOT NULL,
+    description          TEXT,
+    timezone             TEXT NOT NULL,
+    rotation_type        TEXT NOT NULL,          -- daily, weekly, custom
+    rotation_length      INTEGER NOT NULL DEFAULT 7,
+    handoff_time         TIME NOT NULL DEFAULT '09:00',
+    is_follow_the_sun    BOOLEAN DEFAULT false,
+    linked_roster_id     UUID REFERENCES rosters(id),
     escalation_policy_id UUID REFERENCES escalation_policies(id),
-    
-    start_date      DATE NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    start_date           DATE NOT NULL,
+    end_date             DATE,                   -- NULL = perpetual roster
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-### 3.8 roster_members
+The API computes `is_active` from `end_date`: active if `end_date` is NULL or >= today.
+
+### 3.9 roster_members
+
+Migration: `000009_create_roster_members`
 
 ```sql
 CREATE TABLE roster_members (
@@ -269,7 +289,7 @@ CREATE TABLE roster_members (
     roster_id   UUID NOT NULL REFERENCES rosters(id) ON DELETE CASCADE,
     user_id     UUID NOT NULL REFERENCES users(id),
     position    INTEGER NOT NULL,  -- order in rotation (0-indexed)
-    
+
     UNIQUE(roster_id, user_id),
     UNIQUE(roster_id, position)
 );
@@ -277,19 +297,23 @@ CREATE TABLE roster_members (
 CREATE INDEX idx_roster_members_roster ON roster_members(roster_id);
 ```
 
-### 3.9 roster_overrides
+The API JOINs with `users` to return `display_name` alongside each member.
+
+### 3.10 roster_overrides
+
+Migration: `000010_create_roster_overrides`
 
 ```sql
 CREATE TABLE roster_overrides (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roster_id   UUID NOT NULL REFERENCES rosters(id) ON DELETE CASCADE,
-    user_id     UUID NOT NULL REFERENCES users(id),  -- who is covering
+    user_id     UUID NOT NULL REFERENCES users(id),
     start_at    TIMESTAMPTZ NOT NULL,
     end_at      TIMESTAMPTZ NOT NULL,
     reason      TEXT,
     created_by  UUID REFERENCES users(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    
+
     CHECK (end_at > start_at)
 );
 
@@ -297,27 +321,9 @@ CREATE INDEX idx_roster_overrides_roster ON roster_overrides(roster_id);
 CREATE INDEX idx_roster_overrides_active ON roster_overrides(roster_id, start_at, end_at);
 ```
 
-### 3.10 escalation_policies
+### 3.11 escalation_events
 
-```sql
-CREATE TABLE escalation_policies (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        TEXT NOT NULL,
-    description TEXT,
-    tiers       JSONB NOT NULL,
-    -- tiers format:
-    -- [
-    --   { "tier": 1, "timeout_minutes": 5, "notify_via": ["slack_dm"], "targets": ["oncall_primary"] },
-    --   { "tier": 2, "timeout_minutes": 10, "notify_via": ["slack_dm", "phone"], "targets": ["oncall_backup"] },
-    --   { "tier": 3, "timeout_minutes": 15, "notify_via": ["phone", "slack_channel"], "targets": ["team_lead"] }
-    -- ]
-    repeat_count    INTEGER DEFAULT 0,     -- 0 = no repeat, N = repeat N times before giving up
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
-
-### 3.11 escalation_events (escalation audit trail)
+Migration: `000011_create_escalation_events`
 
 ```sql
 CREATE TABLE escalation_events (
@@ -325,10 +331,10 @@ CREATE TABLE escalation_events (
     alert_id        UUID NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
     policy_id       UUID NOT NULL REFERENCES escalation_policies(id),
     tier            INTEGER NOT NULL,
-    action          TEXT NOT NULL,  -- notified, acknowledged, timeout, resolved, cancelled
+    action          TEXT NOT NULL,
     target_user_id  UUID REFERENCES users(id),
-    notify_method   TEXT,           -- slack_dm, phone, sms, slack_channel
-    notify_result   TEXT,           -- sent, failed, busy, voicemail
+    notify_method   TEXT,
+    notify_result   TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -337,15 +343,17 @@ CREATE INDEX idx_escalation_events_alert ON escalation_events(alert_id, created_
 
 ### 3.12 audit_log
 
+Migration: `000012_create_audit_log`
+
 ```sql
 CREATE TABLE audit_log (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID REFERENCES users(id),
-    api_key_id  UUID,                   -- if action via API key
-    action      TEXT NOT NULL,           -- create, update, delete, acknowledge, escalate, resolve, merge, login
-    resource    TEXT NOT NULL,           -- alert, incident, roster, escalation_policy, user, runbook
+    api_key_id  UUID,
+    action      TEXT NOT NULL,
+    resource    TEXT NOT NULL,
     resource_id UUID,
-    detail      JSONB DEFAULT '{}',     -- contextual info (diff, reason, etc.)
+    detail      JSONB DEFAULT '{}',
     ip_address  INET,
     user_agent  TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -354,25 +362,24 @@ CREATE TABLE audit_log (
 CREATE INDEX idx_audit_log_resource ON audit_log(resource, resource_id);
 CREATE INDEX idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX idx_audit_log_created ON audit_log(created_at DESC);
-
--- Partitioned by month for efficient retention
--- CREATE TABLE audit_log (...) PARTITION BY RANGE (created_at);
 ```
+
+Audit entries are written asynchronously via a buffered channel (capacity 256, flush every 2s or at 32 entries).
 
 ### 3.13 slack_message_mappings
 
+Migration: `000013_create_slack_message_mappings`
+
 ```sql
--- Track which Slack messages correspond to which alerts/incidents
--- for interactive message updates (e.g., "Mark Resolved" button)
 CREATE TABLE slack_message_mappings (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     alert_id    UUID REFERENCES alerts(id) ON DELETE CASCADE,
     incident_id UUID REFERENCES incidents(id) ON DELETE CASCADE,
     channel_id  TEXT NOT NULL,
-    message_ts  TEXT NOT NULL,     -- Slack message timestamp (acts as message ID)
-    thread_ts   TEXT,              -- parent thread timestamp if in a thread
+    message_ts  TEXT NOT NULL,
+    thread_ts   TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    
+
     CHECK (alert_id IS NOT NULL OR incident_id IS NOT NULL)
 );
 
@@ -380,57 +387,62 @@ CREATE INDEX idx_slack_mappings_alert ON slack_message_mappings(alert_id);
 CREATE INDEX idx_slack_mappings_channel_ts ON slack_message_mappings(channel_id, message_ts);
 ```
 
-## 4. Key Queries
+## 4. Migration History
 
-### 4.1 Who is on-call right now?
+| # | Name | Description |
+|---|------|-------------|
+| Global 001 | `create_tenants` | Tenants table with slug index |
+| Global 002 | `create_api_keys` | API keys with tenant FK, hash index |
+| Tenant 001 | `create_users` | Users with external_id, email, role |
+| Tenant 002 | `create_services` | Service catalogue with cluster/namespace |
+| Tenant 003 | `create_escalation_policies` | Policies with JSONB tiers |
+| Tenant 004 | `create_runbooks` | Runbooks with category, template flag |
+| Tenant 005 | `create_incidents` | Incidents with FTS trigger |
+| Tenant 006 | `create_incident_history` | Incident changelog |
+| Tenant 007 | `create_alerts` | Alerts with indexes |
+| Tenant 008 | `create_rosters` | On-call rosters |
+| Tenant 009 | `create_roster_members` | Roster membership |
+| Tenant 010 | `create_roster_overrides` | Time-based overrides |
+| Tenant 011 | `create_escalation_events` | Escalation audit trail |
+| Tenant 012 | `create_audit_log` | Audit log |
+| Tenant 013 | `create_slack_message_mappings` | Slack message tracking |
+| Tenant 014 | `add_category_to_search_vector` | Add category to FTS trigger |
+| Tenant 015 | `add_roster_end_date` | Add end_date column to rosters |
+
+## 5. Key Queries
+
+### 5.1 On-call calculation (in Go, not SQL)
+
+The on-call calculation is performed in `pkg/roster/service.go`:
+
+1. Check for active override: `SELECT ... FROM roster_overrides WHERE roster_id = $1 AND start_at <= $2 AND end_at > $2`
+2. If override active: primary = override user, secondary = scheduled rotation member
+3. Calculate rotation position: `days_since_start / rotation_length % member_count`
+4. Primary = member at calculated position, secondary = member at `(position + 1) % count`
+5. Member queries JOIN with `users` table to resolve `display_name`
+
+### 5.2 Full-text knowledge base search
 
 ```sql
--- Check overrides first, then calculate rotation position
-WITH override_check AS (
-    SELECT user_id
-    FROM roster_overrides
-    WHERE roster_id = $1
-      AND now() BETWEEN start_at AND end_at
-    LIMIT 1
-),
-rotation_calc AS (
-    SELECT rm.user_id
-    FROM roster_members rm
-    JOIN rosters r ON r.id = rm.roster_id
-    WHERE r.id = $1
-      AND rm.position = (
-          -- Calculate current position based on days since start
-          EXTRACT(EPOCH FROM (now() - (r.start_date + r.handoff_time)::timestamptz))
-          / (r.rotation_length * 86400)
-      )::integer % (SELECT COUNT(*) FROM roster_members WHERE roster_id = $1)
-)
-SELECT COALESCE(
-    (SELECT user_id FROM override_check),
-    (SELECT user_id FROM rotation_calc)
-) AS on_call_user_id;
-```
-
-### 4.2 Full-text knowledge base search
-
-```sql
-SELECT id, title, severity, symptoms, solution, runbook_id,
-       ts_rank(search_vector, query) AS rank
+SELECT id, title, severity, symptoms, solution,
+       ts_rank(search_vector, query) AS rank,
+       ts_headline('english', title, query) AS title_highlight,
+       ts_headline('english', COALESCE(symptoms, ''), query) AS symptoms_highlight,
+       ts_headline('english', COALESCE(solution, ''), query) AS solution_highlight
 FROM incidents,
      plainto_tsquery('english', $1) query
 WHERE search_vector @@ query
-  AND merged_into_id IS NULL  -- exclude merged incidents
+  AND merged_into_id IS NULL
 ORDER BY rank DESC
-LIMIT $2;
+LIMIT $2 OFFSET $3;
 ```
 
-### 4.3 Alert dedup check
+### 5.3 Alert dedup check
 
-```sql
--- Redis first (hot path), fallback to DB
--- Redis key: alert:dedup:<tenant_id>:<fingerprint>
--- Redis value: alert_id, TTL = dedup_window (e.g., 300s)
+```
+Redis (hot path): GET alert:dedup:{schema}:{fingerprint} → alert_id (5min TTL)
 
--- DB fallback:
+DB fallback:
 SELECT id, occurrence_count
 FROM alerts
 WHERE fingerprint = $1
@@ -439,3 +451,9 @@ WHERE fingerprint = $1
 ORDER BY last_fired_at DESC
 LIMIT 1;
 ```
+
+## 6. sqlc Configuration
+
+Queries are defined in `sqlc/queries/` organized by domain. Schema templates in `sqlc/schema/`. Generated Go code in `internal/db/`. Run `make sqlc` to regenerate.
+
+Note: Some queries (particularly in the roster package) use raw SQL instead of sqlc-generated code for JOINs and columns not in the original sqlc schema (e.g., `display_name` from users, `end_date`).

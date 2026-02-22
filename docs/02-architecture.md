@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-NightOwl is a monolithic API with a React frontend, deployed as a single Helm chart on Kubernetes. It avoids microservice complexity while maintaining clean internal domain boundaries.
+NightOwl is a monolithic Go API with a React frontend, deployed as a single Helm chart on Kubernetes. It avoids microservice complexity while maintaining clean internal domain boundaries.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -10,29 +10,26 @@ NightOwl is a monolithic API with a React frontend, deployed as a single Helm ch
 │                     nightowl.example.com                         │
 ├──────────────────┬───────────────────────────────────────────────┤
 │   Frontend SPA   │              API Server                       │
-│   (React/Vite)   │         (Go or Python/FastAPI)                │
-│   served by API  │                                               │
-│   or separate    ├───────────────────────────────────────────────┤
-│   static deploy  │  ┌─────────┐ ┌──────────┐ ┌──────────────┐  │
+│   (React/Vite)   │           (Go / chi)                          │
+│   nginx container├───────────────────────────────────────────────┤
+│   or dev proxy   │  ┌─────────┐ ┌──────────┐ ┌──────────────┐  │
 │                   │  │  Alert  │ │Knowledge │ │   Roster &   │  │
 │                   │  │ Engine  │ │  Base    │ │  Escalation  │  │
 │                   │  └────┬────┘ └─────┬────┘ └──────┬───────┘  │
 │                   │       │            │             │           │
 │                   │  ┌────┴────────────┴─────────────┴────┐     │
 │                   │  │         PostgreSQL 16+              │     │
-│                   │  │  (tenants, alerts, incidents,       │     │
-│                   │  │   rosters, audit_log)               │     │
+│                   │  │  (schema-per-tenant isolation)      │     │
 │                   │  └────────────────────────────────────┘     │
 │                   │       │                                      │
 │                   │  ┌────┴────┐                                 │
-│                   │  │  Redis  │  (pub/sub, alert dedup cache,  │
-│                   │  │         │   session cache, rate limiting) │
+│                   │  │  Redis  │  (pub/sub, alert dedup cache)  │
 │                   │  └─────────┘                                 │
 ├───────────────────┴──────────────────────────────────────────────┤
 │                    External Integrations                          │
 │  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌────────────────┐    │
-│  │  Slack  │  │  Twilio/  │  │  Keep   │  │ SigNoz/Prom/   │    │
-│  │  Bot    │  │  Vonage   │  │Webhooks │  │ Alertmanager   │    │
+│  │  Slack  │  │  Twilio   │  │  Keep   │  │ SigNoz/Prom/   │    │
+│  │  Bot    │  │  (phone)  │  │Webhooks │  │ Alertmanager   │    │
 │  └─────────┘  └──────────┘  └─────────┘  └────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -43,45 +40,44 @@ NightOwl is a monolithic API with a React frontend, deployed as a single Helm ch
 
 | Factor | Decision |
 |--------|----------|
-| **Language** | Go 1.23+ |
-| **Rationale** | Single binary deployment, excellent Kubernetes ecosystem, low memory footprint, strong concurrency for webhook processing. Familiar in the CNCF ecosystem your customers already operate in. |
-| **Alternative considered** | Python/FastAPI — faster prototyping but heavier runtime, less suited to high-throughput webhook processing |
+| **Language** | Go 1.25+ (module: `github.com/wisbric/nightowl`) |
+| **Rationale** | Single binary deployment, excellent Kubernetes ecosystem, low memory footprint, strong concurrency for webhook processing. Familiar in the CNCF ecosystem. |
+| **Binary** | `cmd/nightowl` with `-mode` flag: `api`, `worker`, `seed`, `seed-demo` |
 
 ### 2.2 Framework & Libraries
 
 | Component | Library | Notes |
 |-----------|---------|-------|
-| HTTP framework | `net/http` + `chi` router | Lightweight, stdlib-compatible |
-| Database | `pgx` (driver) + `sqlc` (codegen) | Type-safe queries, no ORM overhead |
-| Migrations | `golang-migrate` | SQL-based, version controlled |
-| Auth | `coreos/go-oidc` + middleware | OIDC token validation |
-| Slack | `slack-go/slack` | Official community SDK |
+| HTTP framework | `net/http` + `go-chi/chi/v5` | Lightweight, stdlib-compatible |
+| Database | `jackc/pgx/v5` (driver) + `sqlc` (codegen) | Type-safe queries, no ORM overhead |
+| Migrations | `golang-migrate/migrate/v4` | SQL-based, version controlled |
+| Auth | `coreos/go-oidc/v3` + middleware | OIDC token validation + API key auth |
+| Slack | `slack-go/slack` | Community SDK |
 | Telephony | `twilio/twilio-go` | Phone/SMS callout |
-| Redis | `redis/go-redis/v9` | Caching, pub/sub |
+| Redis | `redis/go-redis/v9` | Caching, pub/sub, dedup |
 | Logging | `slog` (stdlib) | Structured JSON logging |
 | Metrics | `prometheus/client_golang` | /metrics endpoint |
-| Tracing | `go.opentelemetry.io/otel` | OTLP export to SigNoz |
-| Testing | `testing` + `testcontainers-go` | Integration tests with real PostgreSQL |
-| Config | `caarlos0/env` + YAML | 12-factor env vars with optional config file |
+| Tracing | `go.opentelemetry.io/otel` | OTLP gRPC export |
+| Config | `caarlos0/env/v11` | 12-factor env vars |
+| UUIDs | `google/uuid` | UUID generation |
 
 ### 2.3 Frontend
 
 | Component | Choice | Notes |
 |-----------|--------|-------|
-| Framework | React 18 + TypeScript | Widely supported, good component ecosystem |
-| Build | Vite | Fast builds, good DX |
-| UI Kit | shadcn/ui + Tailwind | Professional look, accessible, customizable |
-| State | TanStack Query | Server state management, caching |
-| Routing | TanStack Router | Type-safe routing |
+| Framework | React 19 + TypeScript 5.9 | Strict mode enabled |
+| Build | Vite 7 | Dev server on port 3000, proxy to :8080 |
+| UI Kit | shadcn/ui + Tailwind CSS 4 | Dark mode default, custom NightOwl theme |
+| State | TanStack Query 5 | Server state management, caching |
+| Routing | TanStack Router 1 | Type-safe routing, 18 routes |
 | Forms | React Hook Form + Zod | Validation |
-| Tables | TanStack Table | Sortable, filterable data tables |
-| Charts | Recharts | Incident trend dashboards |
-| Calendar | react-big-calendar | Roster visualization |
-| Markdown | @uiw/react-md-editor | Runbook editing |
+| Charts | Recharts 3 | Alert severity bar charts |
+| Icons | lucide-react | Consistent icon set |
+| Dates | date-fns | Date formatting |
 
 ### 2.4 Database: PostgreSQL 16+
 
-Single database with schema-per-tenant isolation for simplicity. Row-level security (RLS) as an alternative for higher tenant density.
+Single database with schema-per-tenant isolation. The `public` schema holds global tables (tenants, API keys). Each tenant gets a `tenant_{slug}` schema with all domain tables.
 
 ### 2.5 Why Not Microservices
 
@@ -93,57 +89,89 @@ For a team of 1–5 engineers, a well-structured monolith with clean domain boun
 
 ```
 pkg/
-├── alert/          # Alert ingestion, dedup, grouping, lifecycle
-│   ├── handler.go  # HTTP handlers (webhook receivers)
-│   ├── service.go  # Business logic
-│   ├── store.go    # Database queries (sqlc generated)
-│   └── dedup.go    # Redis-backed deduplication
-├── incident/       # Knowledge base, runbooks, resolution tracking
+├── alert/           # Alert ingestion, dedup, grouping, lifecycle
+│   ├── handler.go   # HTTP handlers + Routes()
+│   ├── service.go   # Business logic
+│   ├── store.go     # Database queries
+│   ├── alert.go     # Type definitions
+│   ├── webhook.go   # Alertmanager/Keep/generic webhook handlers
+│   ├── dedup.go     # Redis-backed deduplication with DB fallback
+│   └── enrich.go    # KB enrichment (fingerprint + text match)
+├── incident/        # Knowledge base, search, merge, history
 │   ├── handler.go
 │   ├── service.go
 │   ├── store.go
-│   └── search.go   # Full-text search logic
-├── roster/         # On-call schedules, rotations, overrides
+│   └── incident.go
+├── runbook/         # Runbooks CRUD + templates
 │   ├── handler.go
 │   ├── service.go
 │   ├── store.go
-│   └── timezone.go # Cross-timezone handoff calculations
-├── escalation/     # Escalation policies, callout, notifications
+│   ├── runbook.go
+│   └── templates.go # Pre-seeded K8s runbook content
+├── roster/          # On-call schedules, rotations, overrides, history
+│   ├── handler.go
+│   ├── service.go   # On-call calculation, primary/secondary, history
+│   ├── store.go     # Raw SQL JOINs for display_name resolution
+│   ├── roster.go    # Type definitions
+│   └── ical.go      # iCal/ICS calendar export
+├── escalation/      # Escalation policies, engine, dry-run
+│   ├── handler.go
+│   ├── store.go
+│   ├── escalation.go
+│   └── engine.go    # Background worker: 30s poll, tier progression
+├── tenant/          # Multi-tenancy, schema provisioning
+│   ├── tenant.go    # Info struct, context helpers
+│   ├── middleware.go # search_path middleware
+│   └── provisioner.go # Schema creation + migration
+├── slack/           # Slack bot, slash commands, interactive messages
+│   ├── handler.go   # Event/interaction/command handlers
+│   ├── notifier.go  # Alert posting to channels
+│   ├── verify.go    # Signing secret verification
+│   ├── messages.go  # Block kit message builders
+│   └── types.go
+├── integration/     # External telephony
+│   ├── callout.go   # CalloutService interface
+│   └── twilio_handler.go # Twilio voice/SMS handlers
+├── user/            # User CRUD
 │   ├── handler.go
 │   ├── service.go
-│   ├── engine.go   # Escalation timer and state machine
-│   └── notify.go   # Slack, phone, SMS dispatch
-├── tenant/         # Multi-tenancy, RBAC, audit
+│   ├── store.go
+│   └── user.go
+├── apikey/          # API key management
 │   ├── handler.go
 │   ├── service.go
-│   ├── middleware.go # Tenant extraction from JWT/API key
-│   └── audit.go     # Audit log writer
-├── slack/          # Slack bot, slash commands, interactive messages
-│   ├── handler.go   # Event/interaction handlers
-│   ├── commands.go  # Slash command routing
-│   └── messages.go  # Block kit message builders
-└── integration/    # External webhook formatters
-    ├── alertmanager.go
-    ├── keep.go
-    └── generic.go
+│   ├── store.go
+│   └── apikey.go
+└── tenantconfig/    # Tenant settings CRUD
+    ├── handler.go
+    └── config.go
+
+internal/
+├── app/             # Application orchestrator (modes: api, worker, seed, seed-demo)
+├── auth/            # OIDC + API key + RBAC middleware
+├── audit/           # Async buffered audit log writer + list handler
+├── config/          # Env-based config (caarlos0/env)
+├── db/              # sqlc-generated models and queries
+├── docs/            # OpenAPI/Swagger UI handler
+├── httpserver/      # Chi server, middleware, response helpers, pagination
+├── platform/        # PostgreSQL pool, Redis client, migration runner
+├── seed/            # Dev seed + demo seed data
+├── telemetry/       # Logger, metrics registration, tracing setup
+└── version/         # Version + commit (set via ldflags)
 ```
 
 ### 3.2 Cross-Domain Communication
 
-Domains call each other through service interfaces (Go interfaces), never directly accessing another domain's store. This allows testing with mocks and future extraction if needed.
+Domains are loosely coupled. Each domain package creates a `Service` from the tenant-scoped database connection on each request:
 
 ```go
-// escalation/service.go calls roster/service.go
-type RosterQuerier interface {
-    GetCurrentOnCall(ctx context.Context, tenantID, scheduleID uuid.UUID) ([]OnCallMember, error)
-}
-
-// alert/service.go calls incident/service.go
-type KnowledgeBaseSearcher interface {
-    SearchByFingerprint(ctx context.Context, tenantID uuid.UUID, fingerprint string) (*Incident, error)
-    SearchByText(ctx context.Context, tenantID uuid.UUID, query string, limit int) ([]Incident, error)
+func (h *Handler) service(r *http.Request) *Service {
+    conn := tenant.ConnFromContext(r.Context())
+    return NewService(conn, h.logger)
 }
 ```
+
+The alert enricher queries incidents directly via the store layer within the same request-scoped connection.
 
 ## 4. Data Flow
 
@@ -158,27 +186,22 @@ Alertmanager/SigNoz/Keep
         ▼
   ┌─ Parse & normalize to internal alert format
   │
-  ├─ Deduplicate (Redis: fingerprint → last_seen, 5min window)
-  │   └─ If duplicate: update counter, skip processing
+  ├─ Deduplicate (Redis: fingerprint → last_seen, 5min TTL)
+  │   └─ If duplicate: update occurrence_count + last_fired_at, skip
   │
   ├─ Enrich from knowledge base (fingerprint match → attach solution)
   │
-  ├─ Classify severity (from labels or rules)
-  │
   ├─ Persist to PostgreSQL (alerts table)
   │
-  ├─ If critical/major:
-  │   ├─ Post to Slack channel (with solution if known)
-  │   ├─ Look up current on-call from roster
-  │   └─ Start escalation timer
+  ├─ Record Prometheus metrics (received, dedup, processing duration)
   │
-  └─ Publish event to Redis pub/sub (for real-time UI updates)
+  └─ Return 200 with alert ID
 ```
 
 ### 4.2 Escalation Flow
 
 ```
-Alert fires (critical) → Escalation engine starts
+Alert fires (critical) → Escalation engine starts (worker mode, 30s poll)
         │
         ▼
   Tier 1: Notify on-call engineer (Slack DM + push)
@@ -193,8 +216,10 @@ Alert fires (critical) → Escalation engine starts
         ▼ (timeout, e.g., 10 min)
   Tier 3: Notify team lead/manager (phone call + Slack channel alert)
         │
-        └─ If still unacknowledged → post to emergency channel
+        └─ If still unacknowledged → log event, repeat if policy allows
 ```
+
+The escalation engine runs as a separate `--mode=worker` process. It polls for unacknowledged `status='firing'` alerts, steps through tiers based on elapsed time, creates `escalation_events` records, and listens for ack events via Redis pub/sub (`nightowl:alert:ack` channel).
 
 ### 4.3 Incident Resolution & KB Update
 
@@ -207,8 +232,7 @@ Alert resolved (by human or agent)
         ├─ Check: is this a known incident? (fingerprint match)
         │   ├─ Yes: link resolution to existing KB entry, update stats
         │   └─ No: prompt engineer to create KB entry
-        │       ├─ Slack interactive message: "New issue resolved. Add to knowledge base?"
-        │       └─ If agent resolved: auto-create KB entry with agent's resolution notes
+        │       └─ If agent resolved: auto-create KB entry with agent notes
         │
         └─ Post resolution summary to Slack thread
 ```
@@ -220,8 +244,11 @@ Alert resolved (by human or agent)
 | Method | Use Case |
 |--------|----------|
 | OIDC/OAuth2 (JWT) | Web UI users, SSO via Keycloak/Dex |
-| API Key (header: `X-API-Key`) | Webhook senders (Keep, Alertmanager), agent integrations |
+| API Key (header: `X-API-Key`) | Webhook senders, agent integrations, frontend dev mode |
 | Slack signing secret | Slack bot event verification |
+| Dev header (`X-Tenant-Slug`) | Development fallback (no real auth, grants admin) |
+
+**Authentication precedence:** JWT → API Key → Dev header (dev only)
 
 ### 5.2 RBAC Model
 
@@ -233,19 +260,17 @@ Roles per tenant:
 └── readonly   — view dashboards, search KB, view rosters
 ```
 
-Permissions stored in `tenant_members` table with role enum. Middleware extracts tenant + role from JWT claims or API key lookup.
+Role is stored per user in the `users` table and per API key in the `api_keys` table. Middleware extracts tenant + role from JWT claims or API key lookup.
 
 ## 6. Multi-Tenancy
 
 ### 6.1 Isolation Strategy: Schema-per-Tenant
 
-Each tenant gets a separate PostgreSQL schema. The API server sets `search_path` based on the authenticated tenant.
+Each tenant gets a separate PostgreSQL schema. The middleware sets `search_path` on each request.
 
-```sql
--- Tenant creation
-CREATE SCHEMA tenant_adfinis;
-SET search_path TO tenant_adfinis;
--- Run migrations within schema
+```
+Request → auth middleware → resolve tenant slug → acquire pooled connection
+→ SET search_path TO tenant_{slug}, public → domain handler → release connection
 ```
 
 **Why schema isolation over RLS:**
@@ -257,9 +282,8 @@ SET search_path TO tenant_adfinis;
 ### 6.2 Shared Schema
 
 The `public` schema holds only:
-- `tenants` table (id, name, slug, config)
-- `api_keys` table (key_hash, tenant_id, role, description)
-- `global_config` (system-wide settings)
+- `tenants` table (id, name, slug, config JSON)
+- `api_keys` table (key_hash, tenant_id, role, scopes, description)
 
 ## 7. Deployment Architecture
 
@@ -268,134 +292,186 @@ The `public` schema holds only:
 ```yaml
 # Single Helm chart produces:
 Deployment:  nightowl-api      (2+ replicas, stateless)
-Deployment:  nightowl-worker   (1+ replicas, escalation timers, background jobs)
-StatefulSet: nightowl-postgres (or use CNPG operator / external)
-Deployment:  nightowl-redis    (or use external)
-CronJob:     nightowl-cleanup  (data retention enforcement)
+Deployment:  nightowl-worker   (1 replica, escalation engine)
+Deployment:  nightowl-web      (nginx serving React SPA)
 ConfigMap:   nightowl-config
-Secret:      nightowl-secrets  (DB creds, Slack tokens, Twilio keys, API keys)
+Secret:      nightowl-secrets  (DB creds, Slack tokens, Twilio keys)
 Ingress:     nightowl          (TLS via cert-manager)
 Service:     nightowl-api
-Service:     nightowl-postgres
-Service:     nightowl-redis
+Service:     nightowl-web
 ServiceMonitor: nightowl       (Prometheus scraping)
 ```
 
-### 7.2 Worker Process
+PostgreSQL and Redis are expected as external services (or provisioned via operators like CNPG).
 
-Separate deployment running the same binary with `--mode=worker` flag. Handles:
-- Escalation timer ticks (check every 30s for unacknowledged alerts past timeout)
-- Slack event processing (async)
-- Data retention cleanup
-- Roster handoff notifications
+### 7.2 Application Modes
 
-Uses Redis pub/sub to receive events from the API server.
+The same Go binary runs in different modes via `-mode` flag or `NIGHTOWL_MODE` env var:
 
-### 7.3 Resource Estimates
+| Mode | Purpose |
+|------|---------|
+| `api` | HTTP server with all API endpoints |
+| `worker` | Escalation engine (30s poll for unacknowledged alerts) |
+| `seed` | Create dev tenant "acme" with sample users/services (idempotent) |
+| `seed-demo` | Destructive: drop + recreate "acme" with full demo data |
+
+### 7.3 Docker Images
+
+| Image | Contents | Purpose |
+|-------|----------|---------|
+| `ghcr.io/wisbric/nightowl` | Go binary + migrations | API server, worker, seed |
+| `ghcr.io/wisbric/nightowl-web` | Nginx + React build | Frontend SPA |
+
+### 7.4 Development Setup
+
+```bash
+docker compose up -d          # PostgreSQL 16 + Redis 7
+make seed                     # Create dev tenant with sample data
+go run ./cmd/nightowl         # API on :8080
+cd web && npm run dev         # Frontend on :3000 (proxies /api to :8080)
+```
+
+Dev API key: `ow_dev_seed_key_do_not_use_in_production` (auto-used by frontend in dev mode)
+
+### 7.5 Resource Estimates
 
 | Component | CPU Request | Memory Request | Storage |
 |-----------|-------------|----------------|---------|
 | API (per replica) | 100m | 128Mi | — |
 | Worker | 100m | 128Mi | — |
+| Web (per replica) | 50m | 64Mi | — |
 | PostgreSQL | 250m | 512Mi | 10Gi+ |
 | Redis | 50m | 64Mi | — |
-| **Total (minimal)** | **600m** | **960Mi** | **10Gi** |
+| **Total (minimal)** | **650m** | **1Gi** | **10Gi** |
 
 ## 8. API Design
 
-RESTful JSON API. All endpoints under `/api/v1/`. Authentication required on all endpoints except webhook receivers (which use API key auth).
+RESTful JSON API. All endpoints under `/api/v1/` require authentication (API key or JWT) except health checks and Slack webhooks.
 
-### 8.1 Key Endpoints
+### 8.1 Endpoints
 
 ```
+# Health & System (unauthenticated)
+GET    /healthz                                    # Liveness probe
+GET    /readyz                                     # Readiness (DB + Redis ping)
+GET    /metrics                                    # Prometheus metrics
+GET    /api/docs                                   # Swagger UI
+GET    /api/docs/openapi.yaml                      # OpenAPI spec
+
+# System (authenticated)
+GET    /api/v1/status                              # System health, latency, uptime
+GET    /api/v1/ping                                # Debug: returns tenant/role info
+
 # Alerts
-POST   /api/v1/webhooks/alertmanager     # Alertmanager webhook receiver
-POST   /api/v1/webhooks/keep             # Keep webhook receiver
-POST   /api/v1/webhooks/generic          # Generic JSON webhook
-GET    /api/v1/alerts                    # List alerts (filterable)
-GET    /api/v1/alerts/:id                # Get alert detail
-PATCH  /api/v1/alerts/:id/acknowledge    # Acknowledge alert
-PATCH  /api/v1/alerts/:id/resolve        # Resolve alert
+GET    /api/v1/alerts                              # List (filters: status, severity, fingerprint)
+GET    /api/v1/alerts/:id                          # Detail
+PATCH  /api/v1/alerts/:id/acknowledge              # Acknowledge
+PATCH  /api/v1/alerts/:id/resolve                  # Resolve
+
+# Webhooks (API key auth)
+POST   /api/v1/webhooks/alertmanager               # Alertmanager format
+POST   /api/v1/webhooks/keep                       # Keep format
+POST   /api/v1/webhooks/generic                    # Generic JSON
 
 # Knowledge Base (Incidents)
-GET    /api/v1/incidents                 # List/search incidents
-POST   /api/v1/incidents                 # Create incident record
-GET    /api/v1/incidents/:id             # Get incident detail
-PUT    /api/v1/incidents/:id             # Update incident
-GET    /api/v1/incidents/search          # Full-text search
-GET    /api/v1/incidents/fingerprint/:fp # Exact fingerprint lookup
-POST   /api/v1/incidents/:id/merge       # Merge duplicate incidents
-GET    /api/v1/incidents/:id/history     # Version history
+POST   /api/v1/incidents                           # Create
+GET    /api/v1/incidents                           # List (filters: severity, category, service, tags)
+GET    /api/v1/incidents/:id                       # Detail
+PUT    /api/v1/incidents/:id                       # Update
+DELETE /api/v1/incidents/:id                       # Delete
+GET    /api/v1/incidents/search                    # Full-text search with highlighting
+GET    /api/v1/incidents/fingerprint/:fp           # Exact fingerprint lookup
+POST   /api/v1/incidents/:id/merge                 # Merge incidents
+GET    /api/v1/incidents/:id/history               # Change history
 
 # Runbooks
-GET    /api/v1/runbooks                  # List runbooks
-POST   /api/v1/runbooks                  # Create runbook
-GET    /api/v1/runbooks/:id              # Get runbook (markdown)
-PUT    /api/v1/runbooks/:id              # Update runbook
-GET    /api/v1/runbooks/templates        # List pre-seeded templates
+POST   /api/v1/runbooks                           # Create
+GET    /api/v1/runbooks                           # List
+GET    /api/v1/runbooks/:id                       # Detail
+PUT    /api/v1/runbooks/:id                       # Update
+DELETE /api/v1/runbooks/:id                       # Delete
+GET    /api/v1/runbooks/templates                 # List templates
 
 # Rosters
-GET    /api/v1/rosters                   # List schedules
-POST   /api/v1/rosters                   # Create schedule
-GET    /api/v1/rosters/:id               # Get schedule detail
-PUT    /api/v1/rosters/:id               # Update schedule
-GET    /api/v1/rosters/:id/oncall        # Who is on-call now?
-GET    /api/v1/rosters/:id/oncall?at=<ISO8601>  # Who is on-call at time X?
-POST   /api/v1/rosters/:id/overrides     # Add override shift
-DELETE /api/v1/rosters/:id/overrides/:oid # Remove override
-GET    /api/v1/rosters/:id/export.ics    # iCal export
+POST   /api/v1/rosters                            # Create (with optional end_date)
+GET    /api/v1/rosters                            # List (includes is_active status)
+GET    /api/v1/rosters/:id                        # Detail
+PUT    /api/v1/rosters/:id                        # Update
+DELETE /api/v1/rosters/:id                        # Delete
+GET    /api/v1/rosters/:id/oncall                 # Primary + secondary on-call
+GET    /api/v1/rosters/:id/oncall?at=<RFC3339>    # On-call at specific time
+GET    /api/v1/rosters/:id/oncall/history         # Last 10 completed shifts
+GET    /api/v1/rosters/:id/members                # List members (with display_name)
+POST   /api/v1/rosters/:id/members                # Add member
+DELETE /api/v1/rosters/:id/members/:mid            # Remove member
+GET    /api/v1/rosters/:id/overrides              # List overrides
+POST   /api/v1/rosters/:id/overrides              # Create override
+DELETE /api/v1/rosters/:id/overrides/:oid          # Delete override
+GET    /api/v1/rosters/:id/export.ics             # iCal calendar export
 
 # Escalation Policies
-GET    /api/v1/escalation-policies
-POST   /api/v1/escalation-policies
-PUT    /api/v1/escalation-policies/:id
-GET    /api/v1/escalation-policies/:id/test  # Dry-run escalation
+POST   /api/v1/escalation-policies                # Create
+GET    /api/v1/escalation-policies                # List
+GET    /api/v1/escalation-policies/:id            # Detail
+PUT    /api/v1/escalation-policies/:id            # Update
+DELETE /api/v1/escalation-policies/:id            # Delete
+POST   /api/v1/escalation-policies/:id/dry-run    # Simulate escalation path
+GET    /api/v1/escalation-policies/:id/events/:alertID  # Escalation events for alert
 
-# Slack
-POST   /api/v1/slack/events              # Slack event subscription
-POST   /api/v1/slack/interactions         # Slack interactive messages
-POST   /api/v1/slack/commands             # Slash commands
+# Users
+POST   /api/v1/users                              # Create
+GET    /api/v1/users                              # List
+GET    /api/v1/users/:id                          # Detail
+PUT    /api/v1/users/:id                          # Update
+DELETE /api/v1/users/:id                          # Deactivate
+
+# API Keys
+POST   /api/v1/api-keys                           # Create (returns raw key once)
+GET    /api/v1/api-keys                           # List (masked)
+DELETE /api/v1/api-keys/:id                       # Revoke
 
 # Admin
-GET    /api/v1/admin/tenants
-POST   /api/v1/admin/tenants
-GET    /api/v1/admin/audit-log
-GET    /api/v1/admin/stats                # System-wide statistics
+GET    /api/v1/admin/config                       # Get tenant config
+PUT    /api/v1/admin/config                       # Update tenant config
 
-# Health
-GET    /healthz                           # Liveness
-GET    /readyz                            # Readiness (DB + Redis check)
-GET    /metrics                           # Prometheus metrics
+# Audit Log
+GET    /api/v1/audit-log                          # List (filterable)
+
+# Slack (verified by signing secret, not API key auth)
+POST   /api/v1/slack/events                       # Event subscriptions
+POST   /api/v1/slack/interactions                  # Interactive messages
+POST   /api/v1/slack/commands                      # Slash commands
+
+# Twilio
+POST   /api/v1/twilio/voice                       # Voice call webhook
+POST   /api/v1/twilio/sms                         # SMS webhook
 ```
 
 ## 9. Observability
 
 ### 9.1 Metrics (Prometheus)
 
+Namespace: `nightowl`. All registered in `internal/telemetry/metrics.go`.
+
 ```
-nightowl_alerts_received_total{source, severity, tenant}
-nightowl_alerts_deduplicated_total{tenant}
-nightowl_alerts_acknowledged_total{tenant}
-nightowl_alerts_escalated_total{tenant, tier}
-nightowl_alert_processing_duration_seconds{source}
-nightowl_kb_searches_total{tenant, type}  # fingerprint vs text
-nightowl_kb_search_duration_seconds{}
-nightowl_kb_hits_total{tenant}            # search returned results
-nightowl_escalation_response_time_seconds{tenant, tier}
-nightowl_slack_notifications_total{tenant, type}
-nightowl_api_request_duration_seconds{method, path, status}
+nightowl_api_request_duration_seconds{method, path, status}  # HTTP latency histogram
+nightowl_alerts_received_total{source, severity}              # Webhook receipt counter
+nightowl_alerts_deduplicated_total                            # Dedup counter
+nightowl_alerts_agent_resolved_total                          # Agent resolution counter
+nightowl_alert_processing_duration_seconds                    # Webhook processing latency
+nightowl_kb_hits_total                                        # KB enrichment match counter
+nightowl_alerts_escalated_total{tier}                         # Escalation tier counter
+nightowl_slack_notifications_total{type}                      # Slack notification counter
 ```
 
 ### 9.2 Logging
 
-Structured JSON via `slog`. Every log line includes: `tenant_id`, `request_id`, `user_id` (if authenticated), `domain` (alert/incident/roster/escalation).
+Structured JSON via `slog` (configurable text format for development). Every log line includes `request_id`, contextual fields per domain.
 
 ### 9.3 Tracing
 
-OpenTelemetry spans for:
-- Webhook ingestion (parse → dedup → enrich → persist → notify)
-- Escalation engine ticks
-- Slack interactions
-- KB searches
+OpenTelemetry with OTLP gRPC exporter. Configured via `OTEL_EXPORTER_OTLP_ENDPOINT` env var. Disabled if endpoint not set.
 
-Export via OTLP to SigNoz.
+### 9.4 Grafana
+
+Pre-built Grafana dashboard JSON in `deploy/grafana/` for NightOwl metrics visualization.

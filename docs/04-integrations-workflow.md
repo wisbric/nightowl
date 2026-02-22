@@ -4,7 +4,7 @@
 
 ### 1.1 Slack App Configuration
 
-NightOwl operates as a Slack App (not a legacy bot) with the following scopes:
+NightOwl operates as a Slack App with the following scopes:
 
 **Bot Token Scopes:**
 - `chat:write` — post messages to channels
@@ -21,6 +21,16 @@ NightOwl operates as a Slack App (not a legacy bot) with the following scopes:
 **Interactivity:**
 - Request URL: `https://nightowl.example.com/api/v1/slack/interactions`
 - Slash commands URL: `https://nightowl.example.com/api/v1/slack/commands`
+- Events URL: `https://nightowl.example.com/api/v1/slack/events`
+
+**Implementation:** `pkg/slack/` — handler.go, notifier.go, verify.go, messages.go, types.go
+
+**Configuration:** Set via environment variables:
+- `SLACK_BOT_TOKEN` — Bot user OAuth token
+- `SLACK_SIGNING_SECRET` — Request signing secret for verification
+- `SLACK_ALERT_CHANNEL` — Default channel for alert notifications
+
+Slack endpoints are mounted outside the standard API auth chain at `/api/v1/slack/*` and verified using the Slack signing secret instead.
 
 ### 1.2 Slash Commands
 
@@ -48,79 +58,26 @@ NightOwl operates as a Slack App (not a legacy bot) with the following scopes:
 
 ### 1.3 Alert Notification Message Format
 
-```json
-{
-  "blocks": [
-    {
-      "type": "header",
-      "text": { "type": "plain_text", "text": "🔴 CRITICAL: Pod CrashLoopBackOff" }
-    },
-    {
-      "type": "section",
-      "fields": [
-        { "type": "mrkdwn", "text": "*Cluster:* production-de-01" },
-        { "type": "mrkdwn", "text": "*Namespace:* customer-api" },
-        { "type": "mrkdwn", "text": "*Service:* payment-gateway" },
-        { "type": "mrkdwn", "text": "*On-Call:* <@U123456> (Stefan)" }
-      ]
-    },
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "💡 *Known Solution:* OOM kill detected. Scale memory limit from 256Mi to 512Mi. See runbook."
-      }
-    },
-    {
-      "type": "actions",
-      "elements": [
-        { "type": "button", "text": { "type": "plain_text", "text": "✅ Acknowledge" }, "action_id": "ack_alert", "value": "alert_uuid" },
-        { "type": "button", "text": { "type": "plain_text", "text": "📋 View Runbook" }, "action_id": "view_runbook", "url": "https://nightowl.example.com/runbooks/xyz" },
-        { "type": "button", "text": { "type": "plain_text", "text": "🔼 Escalate" }, "action_id": "escalate_alert", "value": "alert_uuid", "style": "danger" }
-      ]
-    }
-  ]
-}
-```
+Block Kit messages posted to the configured alert channel with:
+- Header: severity emoji + alert title
+- Fields: cluster, namespace, service, on-call person
+- Known solution section (if KB match found via enrichment)
+- Action buttons: Acknowledge, View Runbook, Escalate
 
-### 1.4 Resolution Prompt
+### 1.4 Message Tracking
 
-When an alert is resolved and no matching KB entry exists:
+Slack message timestamps (`message_ts`, `thread_ts`) are stored in `slack_message_mappings` table, linked to alert/incident IDs. This enables:
+- Updating messages when alert status changes
+- Thread-based follow-ups to original alert messages
+- Bidirectional linking between Slack and NightOwl
 
-```json
-{
-  "blocks": [
-    {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "✅ Alert *Pod CrashLoopBackOff* resolved by <@U123456>.\n\nThis looks like a *new issue* not in the knowledge base."
-      }
-    },
-    {
-      "type": "actions",
-      "elements": [
-        {
-          "type": "button",
-          "text": { "type": "plain_text", "text": "📝 Add to Knowledge Base" },
-          "action_id": "create_incident_modal",
-          "value": "alert_uuid"
-        },
-        {
-          "type": "button",
-          "text": { "type": "plain_text", "text": "Skip" },
-          "action_id": "skip_kb_entry",
-          "value": "alert_uuid"
-        }
-      ]
-    }
-  ]
-}
-```
+### 1.5 Resolution Prompt
 
-Clicking "Add to Knowledge Base" opens a Slack modal pre-filled with alert metadata.
+When an alert is resolved and no matching KB entry exists, a Slack message offers to create a KB entry with pre-filled metadata from the alert.
 
 ## 2. Webhook Receivers
+
+All webhook receivers are implemented in `pkg/alert/webhook.go` and mounted at `/api/v1/webhooks/`. They require API key authentication via `X-API-Key` header.
 
 ### 2.1 Alertmanager Format
 
@@ -142,13 +99,11 @@ Body: Standard Alertmanager webhook payload
         "alertname": "PodCrashLoopBackOff",
         "cluster": "production-de-01",
         "namespace": "customer-api",
-        "pod": "payment-gateway-7f8b9c-xyz",
         "severity": "critical"
       },
       "annotations": {
         "summary": "Pod is in CrashLoopBackOff",
-        "description": "Pod payment-gateway-7f8b9c-xyz has been restarting for 15 minutes",
-        "runbook_url": "https://runbooks.example.com/pod-crashloop"
+        "description": "Pod has been restarting for 15 minutes"
       },
       "startsAt": "2026-02-20T10:00:00Z",
       "endsAt": "0001-01-01T00:00:00Z",
@@ -158,11 +113,11 @@ Body: Standard Alertmanager webhook payload
 }
 ```
 
-**Processing:**
+**Processing pipeline:**
 1. Extract `fingerprint` from each alert
 2. Map `severity` label to internal severity enum
-3. Map `cluster`, `namespace` to service_id if matching service exists
-4. Run through dedup → enrich → persist → notify pipeline
+3. Run through dedup (Redis 5min TTL, DB fallback) → enrich (KB fingerprint + text match) → persist → return
+4. Record Prometheus metrics (`alerts_received_total`, `alert_processing_duration_seconds`)
 
 ### 2.2 Keep Format
 
@@ -171,7 +126,7 @@ POST /api/v1/webhooks/keep
 Header: X-API-Key: <tenant-api-key>
 Content-Type: application/json
 
-Body: Keep alert event format
+Body:
 {
   "id": "keep-alert-uuid",
   "name": "PodCrashLoopBackOff",
@@ -192,7 +147,7 @@ POST /api/v1/webhooks/generic
 Header: X-API-Key: <tenant-api-key>
 Content-Type: application/json
 
-Body: Any JSON
+Body:
 {
   "title": "Required: alert title",
   "severity": "critical",
@@ -203,7 +158,7 @@ Body: Any JSON
 }
 ```
 
-Field mapping configurable per API key in tenant config.
+All webhook handlers use a lenient JSON decoder (no `DisallowUnknownFields`) to accept payloads with extra fields.
 
 ### 2.4 Agent-Created Alerts
 
@@ -217,10 +172,9 @@ Agents (automated remediation systems) use the generic webhook with additional f
   "source": "remediation-agent",
   "agent_metadata": {
     "agent_id": "k8s-healer-01",
-    "action_taken": "Increased memory limit from 256Mi to 512Mi and restarted pod",
+    "action_taken": "Increased memory limit from 256Mi to 512Mi",
     "action_result": "success",
-    "auto_resolved": true,
-    "confidence": 0.95
+    "auto_resolved": true
   }
 }
 ```
@@ -228,9 +182,29 @@ Agents (automated remediation systems) use the generic webhook with additional f
 If `agent_metadata.auto_resolved` is true, NightOwl:
 1. Creates the alert in resolved state
 2. Auto-creates a KB entry with the agent's action as the solution
-3. Posts a summary to Slack (informational, no escalation)
+3. Records `nightowl_alerts_agent_resolved_total` metric
 
-## 3. Telephony Integration (Twilio/Vonage)
+### 2.5 Deduplication
+
+Implemented in `pkg/alert/dedup.go`:
+
+1. **Redis check** (hot path): Key `alert:dedup:{schema}:{fingerprint}`, 5min TTL
+2. If found: increment `occurrence_count` + `last_fired_at`, record `alerts_deduplicated_total` metric, skip further processing
+3. **DB fallback** (if Redis unavailable): Query alerts by fingerprint where status != resolved and last_fired_at within 5 minutes
+4. If new: set Redis key, proceed to enrichment + persist
+
+### 2.6 Knowledge Base Enrichment
+
+Implemented in `pkg/alert/enrich.go`:
+
+1. Fingerprint lookup in `incidents.fingerprints` array
+2. If match: set `matched_incident_id` and `suggested_solution` on the alert
+3. If no fingerprint match: attempt full-text search on alert title
+4. Record `kb_hits_total` metric on match
+
+## 3. Telephony Integration (Twilio)
+
+Implemented in `pkg/integration/` with a `CalloutService` interface and `TwilioHandler` implementation.
 
 ### 3.1 Phone Callout Flow
 
@@ -240,7 +214,7 @@ Escalation engine triggers phone callout
         ▼
   POST to Twilio REST API
   - From: configured Twilio number (per tenant)
-  - To: on-call engineer's phone (E.164)
+  - To: on-call engineer's phone (E.164 from users table)
   - TwiML: text-to-speech message describing the alert
         │
         ▼
@@ -248,27 +222,31 @@ Escalation engine triggers phone callout
   "Critical alert for <service>. <summary>.
    Press 1 to acknowledge. Press 2 to escalate."
         │
-        ├─ Digit 1: callback to /api/v1/twilio/acknowledge?alert_id=xxx
+        ├─ Digit 1: callback to POST /api/v1/twilio/voice
         │            → acknowledges alert, stops escalation
         │
-        └─ Digit 2: callback to /api/v1/twilio/escalate?alert_id=xxx
+        └─ Digit 2: callback to POST /api/v1/twilio/voice
                      → escalates to next tier
 ```
 
 ### 3.2 SMS Notification
 
-Used as supplementary notification alongside phone calls:
-
 ```
-"[NightOwl] CRITICAL: PodCrashLoopBackOff in production-de-01/customer-api. 
-Reply ACK to acknowledge or ESC to escalate. Alert ID: abc123"
+POST /api/v1/twilio/sms — inbound SMS webhook
+
+"[NightOwl] CRITICAL: PodCrashLoopBackOff in production-de-01.
+Reply ACK to acknowledge or ESC to escalate."
 ```
 
-Inbound SMS webhook processes replies.
+### 3.3 Noop Fallback
+
+A `NoopCaller` stub is provided for environments without Twilio configuration. It logs callout requests without sending.
 
 ## 4. Cross-Timezone Roster Workflow
 
-### 4.1 Follow-the-Sun Example
+### 4.1 Follow-the-Sun
+
+Two rosters can be linked via `linked_roster_id` with `is_follow_the_sun = true`. Each roster covers a 12-hour window starting from its `handoff_time`.
 
 ```
 Roster: "Global Primary"
@@ -279,69 +257,66 @@ Roster: "Global Primary"
 └── Sub-roster: "EMEA" (timezone: Europe/Berlin)
     ├── Handoff time: 08:00 CET (covers 08:00-20:00 CET)
     └── Members: Hans, Katja, Lars (rotation: weekly)
-
-Timeline (UTC):
-00:00 ──── 07:00 ──── 12:00 ──── 19:00 ──── 00:00
-  │  APAC on-call  │  overlap  │  EMEA on-call  │  APAC
-  │  (NZ evening)  │           │  (DE day)       │
-  ├────────────────┤           ├────────────────┤
-  19:00 NZST       08:00 CET  20:00 CET        08:00 NZST
 ```
 
 ### 4.2 Handoff Logic
 
+Implemented in `pkg/roster/service.go`:
+
 ```
 GET /api/v1/rosters/:id/oncall?at=<timestamp>
 
-1. Check override table for active override at given time → return if found
+1. Check override table for active override at given time → if found:
+   - Primary = override user (with display_name)
+   - Secondary = who would normally be on-call
 2. If follow-the-sun:
    a. Convert timestamp to each sub-roster's timezone
-   b. Determine which sub-roster's shift covers this time
+   b. Determine which sub-roster's 12-hour window covers this time
    c. Calculate rotation position within that sub-roster
 3. If standard rotation:
    a. Calculate days since roster start_date
    b. Divide by rotation_length to get current cycle
-   c. Current cycle modulo member count = position
-4. Return on-call user with their timezone and shift boundaries
+   c. position = current_cycle % member_count → primary
+   d. (position + 1) % member_count → secondary
+4. Return primary + secondary on-call with display_name, shift boundaries
 ```
 
-### 4.3 Handoff Notification
+### 4.3 On-Call History
 
-At each handoff time, the worker process sends:
+`GET /api/v1/rosters/:id/oncall/history` returns the last 10 completed rotation shifts by walking backwards through rotation cycles from the current time.
 
-**To outgoing on-call:**
-```
-"Your on-call shift is ending. Open incidents: 2 (1 critical, 1 warning).
-[View Handoff Report]"
-```
+### 4.4 Roster Active Status
 
-**To incoming on-call:**
-```
-"You are now on-call for Global Primary. Open incidents: 2.
-- CRITICAL: etcd leader election failure (cluster prod-de-01) — acknowledged by Hans
-- WARNING: High memory usage on ingress-controller (cluster prod-nz-01) — investigating
-[View Dashboard]"
-```
+Rosters have an optional `end_date`. The API computes `is_active` (true if end_date is NULL or >= today). Inactive rosters are dimmed in the frontend list and filtered from the dashboard on-call widget.
 
-## 5. Alert → Incident Promotion
+### 4.5 iCal Export
 
-When grouped alerts indicate a major incident:
+`GET /api/v1/rosters/:id/export.ics` generates an iCal feed with:
+- Rotation shift events for the next 30 days (using display names)
+- Override events as separate calendar entries
+- Subscribable via any calendar client
 
-1. Engineer clicks "Promote to Incident" in UI or Slack
-2. NightOwl creates an incident record linked to all related alerts
-3. A Slack thread is created as the incident war room
-4. Escalation policy triggers if configured
-5. All future updates to related alerts post to the incident thread
-6. On resolution, engineer is prompted to fill in root cause and solution
+## 5. Escalation Engine
 
-## 6. Data Retention
+Implemented in `pkg/escalation/engine.go`, runs as a separate process (`--mode=worker`).
 
-Handled by `nightowl-cleanup` CronJob running daily:
+### 5.1 Engine Loop
 
-```
-For each tenant:
-  - Delete resolved alerts older than retention_days_alerts (default: 90)
-  - Archive audit_log entries older than retention_days_audit (default: 365)
-  - Incidents/runbooks: never auto-deleted (knowledge is permanent)
-  - Escalation events: follow alert retention
-```
+- Polls every 30 seconds for unacknowledged `status='firing'` alerts
+- Steps through escalation policy tiers based on alert age
+- Creates `escalation_events` records for audit trail
+- Publishes notifications via Redis pub/sub
+- Listens for acknowledgment events on `nightowl:alert:ack` channel
+
+### 5.2 Dry-Run
+
+`POST /api/v1/escalation-policies/:id/dry-run` simulates the full escalation path without triggering notifications. Returns the sequence of tiers, timeouts, and cumulative time.
+
+## 6. Audit Logging
+
+All mutating operations (create, update, delete, acknowledge, resolve, merge) are logged via the async audit writer (`internal/audit/`).
+
+- Non-blocking: channel capacity 256, batch flush at 32 entries or 2 second timeout
+- Entries dropped (with warning log) if buffer is full
+- Captures: user/API key ID, action, resource type, resource ID, detail JSON, IP, user agent
+- Queryable via `GET /api/v1/audit-log` with filtering
