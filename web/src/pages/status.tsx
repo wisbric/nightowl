@@ -29,7 +29,16 @@ export function StatusPage() {
   }
 
   if (!data) {
-    return null;
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">System Status</h1>
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Unable to reach the API. Is the backend running?
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const overallOk = data.status === "ok";
