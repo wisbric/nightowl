@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, LabelList, ResponsiveContainer, Cell } from "recharts";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -11,13 +12,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { OwlIcon } from "@/components/ui/owl-icon";
 import { Link } from "@tanstack/react-router";
 import { formatRelativeTime } from "@/lib/utils";
-import type { AlertsResponse, IncidentsResponse, OnCallResponse, Roster, RostersResponse } from "@/types/api";
+import type { AlertsResponse, AuditEntry, OnCallResponse, Roster, RostersResponse, UsersResponse } from "@/types/api";
 
-function OnCallRow({ roster }: { roster: Roster }) {
+function OnCallRow({ roster, usersById }: { roster: Roster; usersById: Record<string, string> }) {
   const { data, isLoading } = useQuery({
     queryKey: ["roster", roster.id, "oncall"],
     queryFn: () => api.get<OnCallResponse>(`/rosters/${roster.id}/oncall`),
   });
+
+  function name(entry: { display_name?: string; user_id: string } | null | undefined): string {
+    if (!entry) return "";
+    return entry.display_name || usersById[entry.user_id] || entry.user_id.slice(0, 8);
+  }
 
   return (
     <li className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
@@ -26,12 +32,15 @@ function OnCallRow({ roster }: { roster: Roster }) {
       <span className="ml-auto flex items-center gap-2">
         {isLoading ? (
           <LoadingSpinner size="sm" label="" className="py-0" />
-        ) : data?.on_call ? (
+        ) : data?.primary ? (
           <>
-            {data.on_call.is_override && (
+            {data.source === "override" && (
               <Badge variant="outline" className="text-xs">Override</Badge>
             )}
-            <span className="text-sm">{data.on_call.roster_name ? data.on_call.user_id : "No one"}</span>
+            <span className="text-sm">{name(data.primary)}</span>
+            {data.secondary && (
+              <span className="text-xs text-muted-foreground">/ {name(data.secondary)}</span>
+            )}
           </>
         ) : (
           <span className="text-xs text-muted-foreground">No one</span>
@@ -41,7 +50,7 @@ function OnCallRow({ roster }: { roster: Roster }) {
   );
 }
 
-function OnCallWidget({ rosters }: { rosters: Roster[] }) {
+function OnCallWidget({ rosters, usersById }: { rosters: Roster[]; usersById: Record<string, string> }) {
   if (rosters.length === 0) {
     return (
       <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
@@ -54,7 +63,7 @@ function OnCallWidget({ rosters }: { rosters: Roster[] }) {
   return (
     <ul className="mt-2 space-y-1">
       {rosters.map((roster) => (
-        <OnCallRow key={roster.id} roster={roster} />
+        <OnCallRow key={roster.id} roster={roster} usersById={usersById} />
       ))}
     </ul>
   );
@@ -69,17 +78,30 @@ export function DashboardPage() {
   });
   const activeAlerts = alertsData?.alerts ?? [];
 
-  const { data: incidentsData } = useQuery({
-    queryKey: ["incidents", "recent"],
-    queryFn: () => api.get<IncidentsResponse>("/incidents?limit=5"),
+  const { data: activityData } = useQuery({
+    queryKey: ["audit-log", "recent"],
+    queryFn: () => api.get<AuditEntry[]>("/audit-log?limit=8"),
   });
-  const incidents = incidentsData?.items ?? [];
+  const activity = activityData ?? [];
 
   const { data: rostersData } = useQuery({
     queryKey: ["rosters"],
     queryFn: () => api.get<RostersResponse>("/rosters"),
   });
-  const rosters = rostersData?.rosters ?? [];
+  const rosters = (rostersData?.rosters ?? []).filter((r) => r.is_active);
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get<UsersResponse>("/users"),
+  });
+
+  const usersById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const u of usersData?.users ?? []) {
+      map[u.id] = u.display_name;
+    }
+    return map;
+  }, [usersData]);
 
   const criticalCount = activeAlerts.filter((a) => a.severity === "critical").length;
   const warningCount = activeAlerts.filter((a) => a.severity === "warning" || a.severity === "major").length;
@@ -111,10 +133,11 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Open Incidents</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Recent Actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{incidents.length}</div>
+            <div className="text-3xl font-bold">{activity.length}</div>
+            <p className="mt-1 text-xs text-muted-foreground">latest audit entries</p>
           </CardContent>
         </Card>
 
@@ -124,7 +147,7 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{rosters.length}</div>
-            <OnCallWidget rosters={rosters} />
+            <OnCallWidget rosters={rosters} usersById={usersById} />
           </CardContent>
         </Card>
       </div>
@@ -140,10 +163,12 @@ export function DashboardPage() {
                 <BarChart data={severityData}>
                   <XAxis dataKey="name" tick={{ fill: "var(--color-muted-foreground)" }} />
                   <YAxis tick={{ fill: "var(--color-muted-foreground)" }} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", color: "var(--color-card-foreground)" }}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    <LabelList dataKey="count" position="center" fill="#fff" fontWeight={600} fontSize={14} />
+                    {severityData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.fill} cursor="default" />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -181,24 +206,25 @@ export function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Incidents</CardTitle>
+          <CardTitle>Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          {incidents.length === 0 ? (
+          {activity.length === 0 ? (
             <EmptyState
-              title="No incidents yet"
-              description="Incidents from your knowledge base will appear here."
+              title="No activity yet"
+              description="Actions taken by your team will appear here."
               className="py-6"
             />
           ) : (
             <ul className="space-y-2">
-              {incidents.map((inc) => (
-                <li key={inc.id}>
-                  <Link to="/incidents/$incidentId" params={{ incidentId: inc.id }} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
-                    <SeverityBadge severity={inc.severity} />
-                    <span className="flex-1 truncate text-sm">{inc.title}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(inc.created_at)}</span>
-                  </Link>
+              {activity.map((entry) => (
+                <li key={entry.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-muted transition-colors">
+                  <Badge variant="outline" className="text-xs shrink-0">{entry.action}</Badge>
+                  <span className="flex-1 truncate text-sm">
+                    <span className="text-muted-foreground">{entry.resource}</span>
+                    <span className="font-mono text-xs ml-1">{entry.resource_id.slice(0, 8)}</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{formatRelativeTime(entry.created_at)}</span>
                 </li>
               ))}
             </ul>

@@ -6,9 +6,8 @@ import (
 	"time"
 )
 
-// generateICS produces an iCal feed for a roster's rotation schedule.
-// It generates events for the next 30 days and includes overrides.
-func generateICS(roster RosterResponse, members []MemberResponse, overrides []OverrideResponse) string {
+// generateICSFromSchedule produces an iCal feed from explicit roster_schedule entries.
+func generateICSFromSchedule(roster RosterResponse, schedule []ScheduleEntry, overrides []OverrideResponse) string {
 	var b strings.Builder
 
 	b.WriteString("BEGIN:VCALENDAR\r\n")
@@ -17,11 +16,6 @@ func generateICS(roster RosterResponse, members []MemberResponse, overrides []Ov
 	b.WriteString(fmt.Sprintf("X-WR-CALNAME:%s On-Call\r\n", roster.Name))
 	b.WriteString("CALSCALE:GREGORIAN\r\n")
 	b.WriteString("METHOD:PUBLISH\r\n")
-
-	if len(members) == 0 {
-		b.WriteString("END:VCALENDAR\r\n")
-		return b.String()
-	}
 
 	tz, err := time.LoadLocation(roster.Timezone)
 	if err != nil {
@@ -33,45 +27,41 @@ func generateICS(roster RosterResponse, members []MemberResponse, overrides []Ov
 		handoffTime, _ = time.Parse("15:04", "09:00")
 	}
 
-	startDate, err := time.Parse("2006-01-02", roster.StartDate)
-	if err != nil {
-		startDate = time.Now()
-	}
-
-	rotationDays := 7 // default weekly
-	if roster.RotationType == "daily" {
-		rotationDays = 1
-	}
-	if roster.RotationLength > 0 {
-		rotationDays = int(roster.RotationLength)
-	}
-
-	// Generate shift events for the next 30 days.
-	now := time.Now().In(tz)
-	rangeStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tz)
-	rangeEnd := rangeStart.AddDate(0, 0, 30)
-
-	for d := rangeStart; d.Before(rangeEnd); d = d.AddDate(0, 0, rotationDays) {
-		shiftStart := time.Date(d.Year(), d.Month(), d.Day(),
-			handoffTime.Hour(), handoffTime.Minute(), 0, 0, tz)
-		shiftEnd := shiftStart.AddDate(0, 0, rotationDays)
-
-		// Calculate which member is on-call.
-		daysSinceStart := int(d.Sub(startDate).Hours() / 24)
-		if daysSinceStart < 0 {
-			daysSinceStart = 0
+	for _, entry := range schedule {
+		weekStart, err := time.Parse("2006-01-02", entry.WeekStart)
+		if err != nil {
+			continue
 		}
-		cycle := daysSinceStart / rotationDays
-		pos := cycle % len(members)
-		member := members[pos]
+		weekEnd, err := time.Parse("2006-01-02", entry.WeekEnd)
+		if err != nil {
+			continue
+		}
 
-		uid := fmt.Sprintf("%s-%s@nightowl", roster.ID, shiftStart.Format("20060102"))
+		shiftStart := time.Date(weekStart.Year(), weekStart.Month(), weekStart.Day(),
+			handoffTime.Hour(), handoffTime.Minute(), 0, 0, tz)
+		shiftEnd := time.Date(weekEnd.Year(), weekEnd.Month(), weekEnd.Day(),
+			handoffTime.Hour(), handoffTime.Minute(), 0, 0, tz)
+
+		primaryName := "Unassigned"
+		if entry.PrimaryDisplayName != "" {
+			primaryName = entry.PrimaryDisplayName
+		}
+
+		uid := fmt.Sprintf("%s-%s@nightowl", roster.ID, entry.WeekStart)
 		b.WriteString("BEGIN:VEVENT\r\n")
 		b.WriteString(fmt.Sprintf("UID:%s\r\n", uid))
 		b.WriteString(fmt.Sprintf("DTSTART:%s\r\n", shiftStart.UTC().Format("20060102T150405Z")))
 		b.WriteString(fmt.Sprintf("DTEND:%s\r\n", shiftEnd.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("SUMMARY:On-Call: %s\r\n", member.UserID))
-		b.WriteString(fmt.Sprintf("DESCRIPTION:Roster: %s\\nPosition: %d\r\n", roster.Name, member.Position))
+		b.WriteString(fmt.Sprintf("SUMMARY:On-Call: %s\r\n", primaryName))
+
+		desc := fmt.Sprintf("Roster: %s\\nPrimary: %s", roster.Name, primaryName)
+		if entry.SecondaryDisplayName != "" {
+			desc += fmt.Sprintf("\\nSecondary: %s", entry.SecondaryDisplayName)
+		}
+		if entry.Notes != nil && *entry.Notes != "" {
+			desc += fmt.Sprintf("\\nNotes: %s", *entry.Notes)
+		}
+		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", desc))
 		b.WriteString("END:VEVENT\r\n")
 	}
 
@@ -82,7 +72,7 @@ func generateICS(roster RosterResponse, members []MemberResponse, overrides []Ov
 		b.WriteString(fmt.Sprintf("UID:%s\r\n", uid))
 		b.WriteString(fmt.Sprintf("DTSTART:%s\r\n", o.StartAt.UTC().Format("20060102T150405Z")))
 		b.WriteString(fmt.Sprintf("DTEND:%s\r\n", o.EndAt.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("SUMMARY:Override: %s\r\n", o.UserID))
+		b.WriteString(fmt.Sprintf("SUMMARY:Override: %s\r\n", o.DisplayName))
 		reason := ""
 		if o.Reason != nil {
 			reason = *o.Reason

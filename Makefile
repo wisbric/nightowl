@@ -3,8 +3,13 @@
 BIN := bin/nightowl
 DATABASE_URL ?= postgres://nightowl:nightowl@localhost:5432/nightowl?sslmode=disable
 
+VERSION ?= 0.1.0
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS := -X github.com/wisbric/nightowl/internal/version.Version=$(VERSION) \
+           -X github.com/wisbric/nightowl/internal/version.Commit=$(COMMIT)
+
 build:
-	go build -trimpath -o $(BIN) ./cmd/nightowl
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/nightowl
 
 test:
 	go test -race -count=1 ./...

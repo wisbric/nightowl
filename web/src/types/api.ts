@@ -85,39 +85,79 @@ export interface Incident {
   updated_at: string;
 }
 
+// --- Roster v2 types ---
+
 export interface Roster {
   id: string;
   name: string;
+  description?: string;
   timezone: string;
-  rotation_type: string;
-  rotation_length: number;
   handoff_time: string;
+  handoff_day: number; // 0=Sun..6=Sat
+  schedule_weeks_ahead: number;
+  max_consecutive_weeks: number;
   is_follow_the_sun: boolean;
-  start_date: string;
-  members?: RosterMember[];
+  linked_roster_id?: string;
+  active_hours_start?: string;
+  active_hours_end?: string;
+  escalation_policy_id?: string;
+  end_date?: string | null;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface RosterMember {
   id: string;
+  roster_id: string;
   user_id: string;
   display_name: string;
-  position: number;
+  is_active: boolean;
+  joined_at: string;
+  left_at?: string;
+  primary_weeks_served: number;
+}
+
+export interface MembersResponse {
+  members: RosterMember[];
+  count: number;
+}
+
+export interface ScheduleEntry {
+  id: string;
+  roster_id: string;
+  week_start: string;
+  week_end: string;
+  primary_user_id?: string | null;
+  primary_display_name?: string;
+  secondary_user_id?: string | null;
+  secondary_display_name?: string;
+  is_locked: boolean;
+  generated: boolean;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleResponse {
+  schedule: ScheduleEntry[];
+  count: number;
 }
 
 export interface OnCallResponse {
-  on_call: OnCallEntry | null;
-  message?: string;
+  roster_id: string;
+  roster_name: string;
+  queried_at: string;
+  source: "override" | "schedule" | "unassigned";
+  primary: OnCallEntry | null;
+  secondary: OnCallEntry | null;
+  week_start?: string;
+  active_override?: Override | null;
 }
 
 export interface OnCallEntry {
   user_id: string;
-  roster_id: string;
-  roster_name: string;
-  is_override: boolean;
-  shift_start: string;
-  shift_end: string;
+  display_name: string;
 }
 
 export interface Override {
@@ -125,11 +165,19 @@ export interface Override {
   roster_id: string;
   user_id: string;
   display_name: string;
-  start_time: string;
-  end_time: string;
-  reason: string;
+  start_at: string;
+  end_at: string;
+  reason?: string;
+  created_by?: string;
   created_at: string;
 }
+
+export interface OverridesResponse {
+  overrides: Override[];
+  count: number;
+}
+
+// --- Escalation types ---
 
 export interface EscalationPolicy {
   id: string;
@@ -158,6 +206,8 @@ export interface EscalationEvent {
   target: string;
 }
 
+// --- Audit ---
+
 export interface AuditEntry {
   id: string;
   user_id: string | null;
@@ -171,15 +221,7 @@ export interface AuditEntry {
   created_at: string;
 }
 
-export interface MembersResponse {
-  members: RosterMember[];
-  count: number;
-}
-
-export interface OverridesResponse {
-  overrides: Override[];
-  count: number;
-}
+// --- Runbooks ---
 
 export interface Runbook {
   id: string;
@@ -226,6 +268,8 @@ export interface DryRunStep {
   action: string;
 }
 
+// --- Users ---
+
 export interface User {
   id: string;
   email: string;
@@ -253,6 +297,8 @@ export interface UserDetail {
   updated_at: string;
 }
 
+// --- API Keys ---
+
 export interface ApiKeysResponse {
   keys: ApiKeyDetail[];
   count: number;
@@ -273,6 +319,8 @@ export interface ApiKeyCreateResponse extends ApiKeyDetail {
   raw_key: string;
 }
 
+// --- Admin ---
+
 export interface TenantConfigResponse {
   slack_workspace_url: string;
   slack_channel: string;
@@ -285,6 +333,7 @@ export interface TenantConfigResponse {
 export interface StatusResponse {
   status: string;
   version: string;
+  commit_sha: string;
   uptime: string;
   uptime_seconds: number;
   database: string;

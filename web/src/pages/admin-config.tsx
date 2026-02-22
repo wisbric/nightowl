@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { TenantConfigResponse } from "@/types/api";
+import { TIMEZONES } from "@/lib/timezones";
 import { Check } from "lucide-react";
 
 interface ConfigForm {
@@ -26,22 +27,6 @@ const emptyForm: ConfigForm = {
   twilio_phone_number: "",
   default_timezone: "UTC",
 };
-
-const TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Asia/Kolkata",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-] as const;
 
 export function AdminConfigPage() {
   useTitle("Configuration");

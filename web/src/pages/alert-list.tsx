@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
+import { downloadCSV } from "@/lib/csv";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { SeverityBadge } from "@/components/ui/severity-badge";
@@ -12,6 +14,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { AlertsResponse } from "@/types/api";
+import { Download } from "lucide-react";
 
 export function AlertListPage() {
   useTitle("Alerts");
@@ -37,6 +40,29 @@ export function AlertListPage() {
         <CardHeader>
           <div className="flex items-center gap-4">
             <CardTitle className="flex-1">All Alerts</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                downloadCSV(
+                  "alerts.csv",
+                  ["Title", "Severity", "Status", "Source", "Service", "First Fired", "Last Fired"],
+                  alerts.map((a) => [
+                    a.title,
+                    a.severity,
+                    a.status,
+                    a.source,
+                    a.labels?.service ?? "",
+                    a.first_fired_at,
+                    a.last_fired_at,
+                  ]),
+                );
+              }}
+              disabled={alerts.length === 0}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Export CSV
+            </Button>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-40">
               <option value="">All statuses</option>
               <option value="firing">Firing</option>

@@ -21,13 +21,18 @@ export function RunbookListPage() {
   if (categoryFilter) params.set("category", categoryFilter);
   params.set("limit", "100");
 
+  const { data: allRunbooksData } = useQuery({
+    queryKey: ["runbooks", ""],
+    queryFn: () => api.get<RunbooksResponse>("/runbooks?limit=100"),
+  });
+
   const { data: runbooksData, isLoading } = useQuery({
     queryKey: ["runbooks", categoryFilter],
     queryFn: () => api.get<RunbooksResponse>(`/runbooks?${params}`),
   });
   const runbooks = runbooksData?.items ?? [];
 
-  const categories = [...new Set(runbooks.map((r) => r.category).filter(Boolean))].sort();
+  const categories = [...new Set((allRunbooksData?.items ?? []).map((r) => r.category).filter(Boolean))].sort();
 
   return (
     <div className="space-y-6">

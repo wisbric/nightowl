@@ -81,7 +81,7 @@ func TestIsInShiftWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := svc.isInShiftWindow(roster, tt.at)
+			got := svc.isInHandoffWindow(roster, tt.at)
 			if got != tt.want {
 				t.Errorf("isInShiftWindow(%v) = %v, want %v", tt.at, got, tt.want)
 			}
@@ -109,7 +109,7 @@ func TestIsInShiftWindow_WrapsMidnight(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := svc.isInShiftWindow(roster, tt.at)
+			got := svc.isInHandoffWindow(roster, tt.at)
 			if got != tt.want {
 				t.Errorf("isInShiftWindow(%v) = %v, want %v", tt.at, got, tt.want)
 			}

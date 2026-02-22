@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
+import { useHotkey } from "@/hooks/use-hotkey";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -16,6 +17,9 @@ import { Search } from "lucide-react";
 export function AuditLogPage() {
   useTitle("Audit Log");
   const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useHotkey("/", useCallback(() => searchRef.current?.focus(), []));
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["audit-log", search],
@@ -40,7 +44,8 @@ export function AuditLogPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Filter by action, resource, or user..."
+                ref={searchRef}
+                placeholder="Filter by action, resource, or user... (press / to focus)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"

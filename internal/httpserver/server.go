@@ -18,6 +18,7 @@ import (
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/config"
 	"github.com/wisbric/nightowl/internal/docs"
+	"github.com/wisbric/nightowl/internal/version"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
@@ -145,6 +146,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 type statusResponse struct {
 	Status          string  `json:"status"`
 	Version         string  `json:"version"`
+	CommitSHA       string  `json:"commit_sha"`
 	Uptime          string  `json:"uptime"`
 	UptimeSeconds   int64   `json:"uptime_seconds"`
 	Database        string  `json:"database"`
@@ -161,7 +163,8 @@ func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(s.startedAt)
 
 	resp := statusResponse{
-		Version:       "0.1.0",
+		Version:       version.Version,
+		CommitSHA:     version.Commit,
 		Uptime:        uptime.Truncate(time.Second).String(),
 		UptimeSeconds: int64(uptime.Seconds()),
 	}

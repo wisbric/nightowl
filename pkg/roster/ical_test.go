@@ -8,17 +8,15 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestGenerateICS_Empty(t *testing.T) {
+func TestGenerateICSFromSchedule_Empty(t *testing.T) {
 	r := RosterResponse{
-		ID:           uuid.New(),
-		Name:         "Test Roster",
-		Timezone:     "UTC",
-		HandoffTime:  "09:00",
-		StartDate:    "2026-01-01",
-		RotationType: "weekly",
+		ID:          uuid.New(),
+		Name:        "Test Roster",
+		Timezone:    "UTC",
+		HandoffTime: "09:00",
 	}
 
-	ical := generateICS(r, nil, nil)
+	ical := generateICSFromSchedule(r, nil, nil)
 	if !strings.Contains(ical, "BEGIN:VCALENDAR") {
 		t.Error("missing VCALENDAR start")
 	}
@@ -26,54 +24,57 @@ func TestGenerateICS_Empty(t *testing.T) {
 		t.Error("missing VCALENDAR end")
 	}
 	if strings.Contains(ical, "BEGIN:VEVENT") {
-		t.Error("expected no events for empty member list")
+		t.Error("expected no events for empty schedule")
 	}
 }
 
-func TestGenerateICS_WithMembers(t *testing.T) {
+func TestGenerateICSFromSchedule_WithEntries(t *testing.T) {
 	rosterID := uuid.New()
+	primary := uuid.New()
+	secondary := uuid.New()
 	r := RosterResponse{
-		ID:             rosterID,
-		Name:           "Primary",
-		Timezone:       "UTC",
-		HandoffTime:    "08:00",
-		StartDate:      "2026-01-01",
-		RotationType:   "weekly",
-		RotationLength: 7,
+		ID:          rosterID,
+		Name:        "Primary",
+		Timezone:    "UTC",
+		HandoffTime: "08:00",
 	}
 
-	members := []MemberResponse{
-		{ID: uuid.New(), RosterID: rosterID, UserID: uuid.New(), Position: 0},
-		{ID: uuid.New(), RosterID: rosterID, UserID: uuid.New(), Position: 1},
+	schedule := []ScheduleEntry{
+		{
+			ID:                   uuid.New(),
+			RosterID:             rosterID,
+			WeekStart:            "2026-02-24",
+			WeekEnd:              "2026-03-03",
+			PrimaryUserID:        &primary,
+			PrimaryDisplayName:   "Alice",
+			SecondaryUserID:      &secondary,
+			SecondaryDisplayName: "Bob",
+		},
 	}
 
-	ical := generateICS(r, members, nil)
+	ical := generateICSFromSchedule(r, schedule, nil)
 
 	if !strings.Contains(ical, "PRODID:-//NightOwl//Roster//EN") {
 		t.Error("missing PRODID")
 	}
 	if !strings.Contains(ical, "BEGIN:VEVENT") {
-		t.Error("expected events for roster with members")
+		t.Error("expected events for schedule with entries")
 	}
-	if !strings.Contains(ical, "SUMMARY:On-Call:") {
-		t.Error("expected on-call summary in events")
+	if !strings.Contains(ical, "SUMMARY:On-Call: Alice") {
+		t.Error("expected on-call summary with display name")
+	}
+	if !strings.Contains(ical, "Secondary: Bob") {
+		t.Error("expected secondary in description")
 	}
 }
 
-func TestGenerateICS_WithOverrides(t *testing.T) {
+func TestGenerateICSFromSchedule_WithOverrides(t *testing.T) {
 	rosterID := uuid.New()
 	r := RosterResponse{
-		ID:             rosterID,
-		Name:           "Primary",
-		Timezone:       "UTC",
-		HandoffTime:    "08:00",
-		StartDate:      "2026-01-01",
-		RotationType:   "weekly",
-		RotationLength: 7,
-	}
-
-	members := []MemberResponse{
-		{ID: uuid.New(), RosterID: rosterID, UserID: uuid.New(), Position: 0},
+		ID:          rosterID,
+		Name:        "Primary",
+		Timezone:    "UTC",
+		HandoffTime: "08:00",
 	}
 
 	reason := "vacation"
@@ -88,7 +89,7 @@ func TestGenerateICS_WithOverrides(t *testing.T) {
 		},
 	}
 
-	ical := generateICS(r, members, overrides)
+	ical := generateICSFromSchedule(r, nil, overrides)
 
 	if !strings.Contains(ical, "SUMMARY:Override:") {
 		t.Error("expected override event in calendar")

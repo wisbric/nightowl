@@ -1,7 +1,9 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
+import { useHotkey } from "@/hooks/use-hotkey";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/ui/severity-badge";
@@ -38,6 +40,18 @@ export function AlertDetailPage() {
     },
   });
 
+  useHotkey("k", useCallback(() => {
+    if (alert?.status === "firing" && !ackMutation.isPending) {
+      ackMutation.mutate();
+    }
+  }, [alert?.status, ackMutation]));
+
+  useHotkey("r", useCallback(() => {
+    if (alert && alert.status !== "resolved" && !resolveMutation.isPending) {
+      resolveMutation.mutate();
+    }
+  }, [alert, resolveMutation]));
+
   if (isLoading) return <LoadingSpinner size="lg" />;
   if (!alert) return <p className="text-muted-foreground">Alert not found</p>;
 
@@ -60,11 +74,13 @@ export function AlertDetailPage() {
           {alert.status === "firing" && (
             <Button onClick={() => ackMutation.mutate()} disabled={ackMutation.isPending}>
               {ackMutation.isPending ? "Acknowledging..." : "Acknowledge"}
+              <kbd className="ml-1.5 text-[10px] opacity-50 border border-current/20 rounded px-1">K</kbd>
             </Button>
           )}
           {alert.status !== "resolved" && (
             <Button variant="destructive" onClick={() => resolveMutation.mutate()} disabled={resolveMutation.isPending}>
               {resolveMutation.isPending ? "Resolving..." : "Resolve"}
+              <kbd className="ml-1.5 text-[10px] opacity-50 border border-current/20 rounded px-1">R</kbd>
             </Button>
           )}
         </div>

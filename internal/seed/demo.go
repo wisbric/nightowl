@@ -14,6 +14,7 @@ import (
 
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/db"
+	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
@@ -173,57 +174,61 @@ func RunDemo(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir
 	}
 	logger.Info("seed-demo: created escalation policy", "id", policy.ID)
 
-	// ── Rosters ─────────────────────────────────────────────────────────
-	now := time.Now()
-	startDate := pgtype.Date{Time: now.AddDate(0, -1, 0), Valid: true}
-	fts := true
+	// ── Rosters (v2 — explicit schedule) ───────────────────────────────
+	handoffTime := pgtype.Time{Microseconds: 9 * 3600 * 1e6, Valid: true} // 09:00
 
-	rosterNZDesc := "New Zealand on-call team covering NZST business hours"
-	rosterNZ, err := tq.CreateRoster(ctx, db.CreateRosterParams{
-		Name: "NZ On-Call", Description: &rosterNZDesc,
-		Timezone: "Pacific/Auckland", RotationType: "weekly", RotationLength: 7,
-		HandoffTime:        pgtype.Time{Microseconds: 9 * 3600 * 1e6, Valid: true}, // 09:00
-		IsFollowTheSun:     &fts,
-		EscalationPolicyID: pgtype.UUID{Bytes: policy.ID, Valid: true},
-		StartDate:          startDate,
-	})
+	var rosterNZID, rosterDEID uuid.UUID
+	err = conn.QueryRow(ctx, `INSERT INTO rosters (name, description, timezone, handoff_time, handoff_day,
+	      schedule_weeks_ahead, max_consecutive_weeks, is_follow_the_sun,
+	      escalation_policy_id, is_active)
+	    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING id`,
+		"NZ On-Call", "New Zealand on-call team covering NZST business hours",
+		"Pacific/Auckland", handoffTime, 1, 12, 2, true,
+		policy.ID,
+	).Scan(&rosterNZID)
 	if err != nil {
 		return fmt.Errorf("creating roster NZ: %w", err)
 	}
 
-	rosterDEDesc := "Germany on-call team covering CET business hours"
-	rosterDE, err := tq.CreateRoster(ctx, db.CreateRosterParams{
-		Name: "DE On-Call", Description: &rosterDEDesc,
-		Timezone: "Europe/Berlin", RotationType: "weekly", RotationLength: 7,
-		HandoffTime:        pgtype.Time{Microseconds: 9 * 3600 * 1e6, Valid: true},
-		IsFollowTheSun:     &fts,
-		LinkedRosterID:     pgtype.UUID{Bytes: rosterNZ.ID, Valid: true},
-		EscalationPolicyID: pgtype.UUID{Bytes: policy.ID, Valid: true},
-		StartDate:          startDate,
-	})
+	err = conn.QueryRow(ctx, `INSERT INTO rosters (name, description, timezone, handoff_time, handoff_day,
+	      schedule_weeks_ahead, max_consecutive_weeks, is_follow_the_sun,
+	      linked_roster_id, escalation_policy_id, is_active)
+	    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true) RETURNING id`,
+		"DE On-Call", "Germany on-call team covering CET business hours",
+		"Europe/Berlin", handoffTime, 1, 12, 2, true,
+		rosterNZID, policy.ID,
+	).Scan(&rosterDEID)
 	if err != nil {
 		return fmt.Errorf("creating roster DE: %w", err)
 	}
 
-	// NZ members: Chandra (pos 1), Enzo (pos 2)
+	// Add members (v2: no position, has is_active).
 	for _, m := range []struct {
 		rid uuid.UUID
 		uid uuid.UUID
-		pos int32
 	}{
-		{rosterNZ.ID, chandra.ID, 1},
-		{rosterNZ.ID, enzo.ID, 2},
-		{rosterDE.ID, alice.ID, 1},
-		{rosterDE.ID, diana.ID, 2},
-		{rosterDE.ID, bob.ID, 3},
+		{rosterNZID, chandra.ID},
+		{rosterNZID, enzo.ID},
+		{rosterDEID, alice.ID},
+		{rosterDEID, diana.ID},
+		{rosterDEID, bob.ID},
 	} {
-		if _, err := tq.CreateRosterMember(ctx, db.CreateRosterMemberParams{
-			RosterID: m.rid, UserID: m.uid, Position: m.pos,
-		}); err != nil {
+		if _, err := conn.Exec(ctx,
+			`INSERT INTO roster_members (roster_id, user_id, is_active, joined_at) VALUES ($1,$2,true,now())`,
+			m.rid, m.uid); err != nil {
 			return fmt.Errorf("creating roster member: %w", err)
 		}
 	}
-	logger.Info("seed-demo: created rosters with members", "rosters", 2, "members", 5)
+
+	// Generate schedules for both rosters using the service.
+	rosterSvc := roster.NewService(conn, logger)
+	if _, err := rosterSvc.GenerateSchedule(ctx, rosterNZID, time.Now(), 12); err != nil {
+		return fmt.Errorf("generating NZ schedule: %w", err)
+	}
+	if _, err := rosterSvc.GenerateSchedule(ctx, rosterDEID, time.Now(), 12); err != nil {
+		return fmt.Errorf("generating DE schedule: %w", err)
+	}
+	logger.Info("seed-demo: created rosters with members and schedule", "rosters", 2, "members", 5)
 
 	// ── Knowledge Base Incidents ────────────────────────────────────────
 	type incSpec struct {
@@ -496,8 +501,8 @@ func RunDemo(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir
 		{diana.ID, "create", "service", svcAuth.ID, `{"name":"auth-service"}`},
 		{bob.ID, "create", "service", svcOrder.ID, `{"name":"order-api"}`},
 		{alice.ID, "create", "escalation_policy", policy.ID, `{"name":"Production Critical"}`},
-		{alice.ID, "create", "roster", rosterNZ.ID, `{"name":"NZ On-Call"}`},
-		{alice.ID, "create", "roster", rosterDE.ID, `{"name":"DE On-Call"}`},
+		{alice.ID, "create", "roster", rosterNZID, `{"name":"NZ On-Call"}`},
+		{alice.ID, "create", "roster", rosterDEID, `{"name":"DE On-Call"}`},
 		{alice.ID, "create", "incident", incidentIDs[0], `{"title":"Pod CrashLoopBackOff — OOMKilled"}`},
 		{bob.ID, "create", "incident", incidentIDs[1], `{"title":"Pod CrashLoopBackOff — Config Error"}`},
 		{chandra.ID, "create", "incident", incidentIDs[2], `{"title":"TLS Certificate Expired — Ingress 503"}`},

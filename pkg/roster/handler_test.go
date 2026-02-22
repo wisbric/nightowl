@@ -45,7 +45,7 @@ func TestCreateRoster_InvalidJSON(t *testing.T) {
 func TestCreateRoster_MissingName(t *testing.T) {
 	router := newTestRouter()
 
-	body := `{"timezone":"UTC","rotation_type":"weekly","rotation_length":7,"handoff_time":"09:00","start_date":"2026-01-01"}`
+	body := `{"timezone":"UTC","handoff_time":"09:00"}`
 	r := httptest.NewRequest(http.MethodPost, "/rosters/", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

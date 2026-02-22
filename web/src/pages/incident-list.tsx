@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
+import { useHotkey } from "@/hooks/use-hotkey";
+import { downloadCSV } from "@/lib/csv";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -14,7 +16,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Incident, IncidentsResponse, SearchResponse, SearchResult } from "@/types/api";
-import { Search } from "lucide-react";
+import { Search, Download } from "lucide-react";
 
 interface SearchRow {
   incident: Incident;
@@ -29,6 +31,9 @@ export function IncidentListPage() {
   useTitle("Knowledge Base");
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useHotkey("/", useCallback(() => searchRef.current?.focus(), []));
 
   const isSearch = search.length >= 2;
 
@@ -69,9 +74,32 @@ export function IncidentListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Knowledge Base</h1>
-        <Link to="/incidents/$incidentId" params={{ incidentId: "new" }}>
-          <Button>New Incident</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              downloadCSV(
+                "incidents.csv",
+                ["Title", "Severity", "Category", "Services", "Occurrences", "Updated"],
+                rows.map(({ incident: inc }) => [
+                  inc.title,
+                  inc.severity,
+                  inc.category || "",
+                  (inc.services ?? []).join("; "),
+                  String(inc.resolution_count),
+                  inc.updated_at,
+                ]),
+              );
+            }}
+            disabled={rows.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Export CSV
+          </Button>
+          <Link to="/incidents/$incidentId" params={{ incidentId: "new" }}>
+            <Button>New Incident</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -80,7 +108,8 @@ export function IncidentListPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search incidents..."
+                ref={searchRef}
+                placeholder="Search incidents... (press / to focus)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"

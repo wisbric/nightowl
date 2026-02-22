@@ -14,6 +14,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { UsersResponse, UserDetail } from "@/types/api";
+import { TIMEZONES } from "@/lib/timezones";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 interface UserForm {
@@ -230,12 +231,15 @@ export function AdminUsersPage() {
             </div>
             <div>
               <label className="text-sm font-medium">Timezone</label>
-              <Input
+              <Select
                 value={form.timezone}
                 onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                placeholder="e.g. America/New_York"
                 required
-              />
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </Select>
             </div>
             {error && (
               <p className="text-sm text-destructive">

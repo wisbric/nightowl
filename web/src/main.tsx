@@ -21,6 +21,8 @@ import { AuditLogPage } from "@/pages/audit-log";
 import { RunbookListPage } from "@/pages/runbook-list";
 import { RunbookDetailPage } from "@/pages/runbook-detail";
 import { StatusPage } from "@/pages/status";
+import { AboutPage } from "@/pages/about";
+import { NotFoundPage } from "@/pages/not-found";
 import "./index.css";
 
 initTheme();
@@ -56,6 +58,8 @@ const adminApiKeysRoute = createRoute({ getParentRoute: () => rootRoute, path: "
 const adminConfigRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/config", component: AdminConfigPage });
 const auditLogRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin/audit-log", component: AuditLogPage });
 const statusRoute = createRoute({ getParentRoute: () => rootRoute, path: "/status", component: StatusPage });
+const aboutRoute = createRoute({ getParentRoute: () => rootRoute, path: "/about", component: AboutPage });
+const notFoundRoute = createRoute({ getParentRoute: () => rootRoute, path: "$", component: NotFoundPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -70,11 +74,13 @@ const routeTree = rootRoute.addChildren([
   escalationRoute,
   escalationDetailRoute,
   statusRoute,
+  aboutRoute,
   adminRoute,
   adminUsersRoute,
   adminApiKeysRoute,
   adminConfigRoute,
   auditLogRoute,
+  notFoundRoute,
 ]);
 
 const router = createRouter({ routeTree });

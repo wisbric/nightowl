@@ -19,6 +19,7 @@ import (
 	"github.com/wisbric/nightowl/internal/platform"
 	"github.com/wisbric/nightowl/internal/seed"
 	"github.com/wisbric/nightowl/internal/telemetry"
+	"github.com/wisbric/nightowl/internal/version"
 	"github.com/wisbric/nightowl/pkg/alert"
 	"github.com/wisbric/nightowl/pkg/apikey"
 	"github.com/wisbric/nightowl/pkg/escalation"
@@ -43,7 +44,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	)
 
 	// Tracing
-	shutdownTracer, err := telemetry.InitTracer(ctx, cfg.OTLPEndpoint, "nightowl", "0.1.0")
+	shutdownTracer, err := telemetry.InitTracer(ctx, cfg.OTLPEndpoint, "nightowl", version.Version)
 	if err != nil {
 		return fmt.Errorf("initializing tracer: %w", err)
 	}

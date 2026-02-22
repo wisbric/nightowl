@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,28 +29,7 @@ func NewService(dbtx db.DBTX, logger *slog.Logger) *Service {
 // --- Roster CRUD ---
 
 func (s *Service) CreateRoster(ctx context.Context, req CreateRosterRequest) (RosterResponse, error) {
-	handoffTime, err := parseHandoffTime(req.HandoffTime)
-	if err != nil {
-		return RosterResponse{}, fmt.Errorf("invalid handoff_time: %w", err)
-	}
-	startDate, err := parseDate(req.StartDate)
-	if err != nil {
-		return RosterResponse{}, fmt.Errorf("invalid start_date: %w", err)
-	}
-
-	fts := req.IsFollowTheSun
-	return s.store.CreateRoster(ctx, db.CreateRosterParams{
-		Name:               req.Name,
-		Description:        req.Description,
-		Timezone:           req.Timezone,
-		RotationType:       req.RotationType,
-		RotationLength:     int32(req.RotationLength),
-		HandoffTime:        handoffTime,
-		IsFollowTheSun:     &fts,
-		LinkedRosterID:     uuidToPgtype(req.LinkedRosterID),
-		EscalationPolicyID: uuidToPgtype(req.EscalationPolicyID),
-		StartDate:          startDate,
-	})
+	return s.store.CreateRoster(ctx, req)
 }
 
 func (s *Service) GetRoster(ctx context.Context, id uuid.UUID) (RosterResponse, error) {
@@ -63,20 +41,7 @@ func (s *Service) ListRosters(ctx context.Context) ([]RosterResponse, error) {
 }
 
 func (s *Service) UpdateRoster(ctx context.Context, id uuid.UUID, req UpdateRosterRequest) (RosterResponse, error) {
-	handoffTime, err := parseHandoffTime(req.HandoffTime)
-	if err != nil {
-		return RosterResponse{}, fmt.Errorf("invalid handoff_time: %w", err)
-	}
-
-	return s.store.UpdateRoster(ctx, db.UpdateRosterParams{
-		ID:             id,
-		Name:           req.Name,
-		Description:    req.Description,
-		Timezone:       req.Timezone,
-		RotationType:   req.RotationType,
-		RotationLength: int32(req.RotationLength),
-		HandoffTime:    handoffTime,
-	})
+	return s.store.UpdateRoster(ctx, id, req)
 }
 
 func (s *Service) DeleteRoster(ctx context.Context, id uuid.UUID) error {
@@ -86,18 +51,89 @@ func (s *Service) DeleteRoster(ctx context.Context, id uuid.UUID) error {
 // --- Member CRUD ---
 
 func (s *Service) ListMembers(ctx context.Context, rosterID uuid.UUID) ([]MemberResponse, error) {
-	return s.store.ListMembers(ctx, rosterID)
+	members, err := s.store.ListMembers(ctx, rosterID)
+	if err != nil {
+		return nil, err
+	}
+	// Enrich with primary weeks served.
+	for i := range members {
+		count, _ := s.store.CountPrimaryWeeks(ctx, rosterID, members[i].UserID)
+		members[i].PrimaryWeeksServed = count
+	}
+	return members, nil
 }
 
 func (s *Service) AddMember(ctx context.Context, rosterID uuid.UUID, req AddMemberRequest) (MemberResponse, error) {
-	return s.store.AddMember(ctx, rosterID, req.UserID, req.Position)
+	member, err := s.store.AddMember(ctx, rosterID, req.UserID)
+	if err != nil {
+		return MemberResponse{}, err
+	}
+	// Regenerate unlocked future schedule to include the new member.
+	go func() {
+		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
+			s.logger.Error("regenerating schedule after add member", "error", err, "roster_id", rosterID)
+		}
+	}()
+	return member, nil
 }
 
-func (s *Service) RemoveMember(ctx context.Context, memberID uuid.UUID) error {
-	return s.store.RemoveMember(ctx, memberID)
+func (s *Service) DeactivateMember(ctx context.Context, rosterID, userID uuid.UUID) error {
+	if err := s.store.DeactivateMember(ctx, rosterID, userID); err != nil {
+		return err
+	}
+	// Regenerate unlocked future schedule without the deactivated member.
+	go func() {
+		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
+			s.logger.Error("regenerating schedule after deactivate member", "error", err, "roster_id", rosterID)
+		}
+	}()
+	return nil
 }
 
-// --- Override CRUD ---
+func (s *Service) SetMemberActive(ctx context.Context, rosterID, userID uuid.UUID, active bool) error {
+	if err := s.store.SetMemberActive(ctx, rosterID, userID, active); err != nil {
+		return err
+	}
+	go func() {
+		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
+			s.logger.Error("regenerating schedule after toggle member", "error", err, "roster_id", rosterID)
+		}
+	}()
+	return nil
+}
+
+// regenerateFuture regenerates unlocked future schedule weeks.
+func (s *Service) regenerateFuture(ctx context.Context, rosterID uuid.UUID) error {
+	roster, err := s.store.GetRoster(ctx, rosterID)
+	if err != nil {
+		return err
+	}
+	_, err = s.GenerateSchedule(ctx, rosterID, time.Now(), roster.ScheduleWeeksAhead)
+	return err
+}
+
+// --- Schedule ---
+
+func (s *Service) GetSchedule(ctx context.Context, rosterID uuid.UUID, from, to time.Time) ([]ScheduleEntry, error) {
+	return s.store.ListSchedule(ctx, rosterID, from, to)
+}
+
+func (s *Service) GetScheduleWeek(ctx context.Context, rosterID uuid.UUID, weekStart time.Time) (*ScheduleEntry, error) {
+	return s.store.GetScheduleWeek(ctx, rosterID, weekStart)
+}
+
+func (s *Service) UpdateScheduleWeek(ctx context.Context, rosterID uuid.UUID, weekStart time.Time, req UpdateScheduleWeekRequest) (*ScheduleEntry, error) {
+	// Compute week_end.
+	weekEnd := weekStart.AddDate(0, 0, 7)
+	return s.store.UpsertScheduleWeek(ctx, rosterID, weekStart, weekEnd,
+		req.PrimaryUserID, req.SecondaryUserID, true, false, req.Notes)
+}
+
+func (s *Service) UnlockScheduleWeek(ctx context.Context, rosterID uuid.UUID, weekStart time.Time) error {
+	return s.store.UnlockScheduleWeek(ctx, rosterID, weekStart)
+}
+
+// --- Overrides ---
 
 func (s *Service) ListOverrides(ctx context.Context, rosterID uuid.UUID) ([]OverrideResponse, error) {
 	return s.store.ListOverrides(ctx, rosterID)
@@ -115,25 +151,15 @@ func (s *Service) CreateOverride(ctx context.Context, rosterID uuid.UUID, req Cr
 	if !endAt.After(startAt) {
 		return OverrideResponse{}, fmt.Errorf("end_at must be after start_at")
 	}
-
-	return s.store.CreateOverride(ctx, db.CreateRosterOverrideParams{
-		RosterID:  rosterID,
-		UserID:    req.UserID,
-		StartAt:   startAt,
-		EndAt:     endAt,
-		Reason:    req.Reason,
-		CreatedBy: callerID,
-	})
+	return s.store.CreateOverride(ctx, rosterID, req.UserID, startAt, endAt, req.Reason, callerID)
 }
 
 func (s *Service) DeleteOverride(ctx context.Context, overrideID uuid.UUID) error {
 	return s.store.DeleteOverride(ctx, overrideID)
 }
 
-// --- On-call calculation ---
+// --- On-call resolution: override → schedule → unassigned ---
 
-// GetOnCall returns who is on-call for a roster at the given time.
-// It checks overrides first, then calculates the rotation position.
 func (s *Service) GetOnCall(ctx context.Context, rosterID uuid.UUID, at time.Time) (*OnCallResponse, error) {
 	roster, err := s.store.GetRoster(ctx, rosterID)
 	if err != nil {
@@ -145,150 +171,139 @@ func (s *Service) GetOnCall(ctx context.Context, rosterID uuid.UUID, at time.Tim
 		return s.getFollowTheSunOnCall(ctx, roster, at)
 	}
 
-	return s.calculateOnCall(ctx, roster, at)
+	return s.resolveOnCall(ctx, roster, at)
 }
 
-// calculateOnCall computes who is on-call using the rotation schedule.
-func (s *Service) calculateOnCall(ctx context.Context, roster RosterResponse, at time.Time) (*OnCallResponse, error) {
+func (s *Service) resolveOnCall(ctx context.Context, roster RosterResponse, at time.Time) (*OnCallResponse, error) {
+	resp := &OnCallResponse{
+		RosterID:   roster.ID,
+		RosterName: roster.Name,
+		QueriedAt:  at,
+	}
+
 	// 1. Check for active override.
 	override, err := s.store.GetActiveOverride(ctx, roster.ID, at)
 	if err != nil {
 		return nil, fmt.Errorf("checking override: %w", err)
 	}
+
 	if override != nil {
-		return &OnCallResponse{
-			UserID:     override.UserID,
-			RosterID:   roster.ID,
-			RosterName: roster.Name,
-			IsOverride: true,
-			ShiftStart: override.StartAt,
-			ShiftEnd:   override.EndAt,
-		}, nil
+		resp.Source = "override"
+		resp.Primary = &OnCallEntry{
+			UserID:      override.UserID,
+			DisplayName: override.DisplayName,
+		}
+		resp.ActiveOverride = override
+
+		// Still look up scheduled secondary.
+		sched, _ := s.store.GetScheduleForTime(ctx, roster.ID, at)
+		if sched != nil {
+			resp.WeekStart = &sched.WeekStart
+			if sched.SecondaryUserID != nil {
+				resp.Secondary = &OnCallEntry{
+					UserID:      *sched.SecondaryUserID,
+					DisplayName: sched.SecondaryDisplayName,
+				}
+			}
+		}
+		return resp, nil
 	}
 
-	// 2. Calculate rotation position.
-	members, err := s.store.ListMembers(ctx, roster.ID)
+	// 2. Check schedule for current time.
+	sched, err := s.store.GetScheduleForTime(ctx, roster.ID, at)
 	if err != nil {
-		return nil, fmt.Errorf("listing members: %w", err)
-	}
-	if len(members) == 0 {
-		return nil, nil // No members, no one on-call.
+		return nil, fmt.Errorf("getting schedule: %w", err)
 	}
 
-	loc, err := time.LoadLocation(roster.Timezone)
-	if err != nil {
-		return nil, fmt.Errorf("loading timezone %q: %w", roster.Timezone, err)
+	if sched != nil {
+		resp.Source = "schedule"
+		resp.WeekStart = &sched.WeekStart
+		if sched.PrimaryUserID != nil {
+			resp.Primary = &OnCallEntry{
+				UserID:      *sched.PrimaryUserID,
+				DisplayName: sched.PrimaryDisplayName,
+			}
+		}
+		if sched.SecondaryUserID != nil {
+			resp.Secondary = &OnCallEntry{
+				UserID:      *sched.SecondaryUserID,
+				DisplayName: sched.SecondaryDisplayName,
+			}
+		}
+		return resp, nil
 	}
 
-	startDate, err := time.Parse("2006-01-02", roster.StartDate)
-	if err != nil {
-		return nil, fmt.Errorf("parsing start_date: %w", err)
-	}
-
-	handoffTime, err := time.Parse("15:04", roster.HandoffTime)
-	if err != nil {
-		return nil, fmt.Errorf("parsing handoff_time: %w", err)
-	}
-
-	// Build the rotation start point in the roster's timezone.
-	rosterStart := time.Date(
-		startDate.Year(), startDate.Month(), startDate.Day(),
-		handoffTime.Hour(), handoffTime.Minute(), 0, 0, loc,
-	)
-
-	// Days since roster start.
-	elapsed := at.Sub(rosterStart)
-	if elapsed < 0 {
-		// Before roster start — first member is on-call.
-		shiftEnd := rosterStart
-		shiftStart := shiftEnd.Add(-time.Duration(roster.RotationLength) * 24 * time.Hour)
-		return &OnCallResponse{
-			UserID:     members[0].UserID,
-			RosterID:   roster.ID,
-			RosterName: roster.Name,
-			ShiftStart: shiftStart,
-			ShiftEnd:   shiftEnd,
-		}, nil
-	}
-
-	rotationDays := float64(roster.RotationLength)
-	daysSinceStart := elapsed.Hours() / 24.0
-	currentCycle := int(math.Floor(daysSinceStart / rotationDays))
-	position := currentCycle % len(members)
-
-	shiftStart := rosterStart.Add(time.Duration(currentCycle) * time.Duration(roster.RotationLength) * 24 * time.Hour)
-	shiftEnd := shiftStart.Add(time.Duration(roster.RotationLength) * 24 * time.Hour)
-
-	return &OnCallResponse{
-		UserID:     members[position].UserID,
-		RosterID:   roster.ID,
-		RosterName: roster.Name,
-		ShiftStart: shiftStart,
-		ShiftEnd:   shiftEnd,
-	}, nil
+	// 3. Unassigned.
+	resp.Source = "unassigned"
+	return resp, nil
 }
 
-// getFollowTheSunOnCall determines which sub-roster is active at the given time
-// and returns the on-call from that sub-roster.
+// getFollowTheSunOnCall determines which sub-roster is active based on active hours.
 func (s *Service) getFollowTheSunOnCall(ctx context.Context, roster RosterResponse, at time.Time) (*OnCallResponse, error) {
-	linkedRoster, err := s.store.GetRoster(ctx, *roster.LinkedRosterID)
-	if err != nil {
-		return nil, fmt.Errorf("getting linked roster: %w", err)
+	if s.isInActiveHours(roster, at) {
+		return s.resolveOnCall(ctx, roster, at)
 	}
-
-	// Determine which roster covers this time based on handoff hours in their respective timezones.
-	if s.isInShiftWindow(roster, at) {
-		return s.calculateOnCall(ctx, roster, at)
+	if roster.LinkedRosterID != nil {
+		linkedRoster, err := s.store.GetRoster(ctx, *roster.LinkedRosterID)
+		if err != nil {
+			return nil, fmt.Errorf("getting linked roster: %w", err)
+		}
+		if s.isInActiveHours(linkedRoster, at) {
+			return s.resolveOnCall(ctx, linkedRoster, at)
+		}
 	}
-	if s.isInShiftWindow(linkedRoster, at) {
-		return s.calculateOnCall(ctx, linkedRoster, at)
-	}
-
-	// Fallback: use the primary roster.
-	return s.calculateOnCall(ctx, roster, at)
+	// Fallback: use this roster.
+	return s.resolveOnCall(ctx, roster, at)
 }
 
-// isInShiftWindow checks if the given time falls within a roster's shift window.
-// Each roster covers a 12-hour window starting from its handoff time.
-func (s *Service) isInShiftWindow(roster RosterResponse, at time.Time) bool {
+func (s *Service) isInActiveHours(roster RosterResponse, at time.Time) bool {
+	if roster.ActiveHoursStart == nil || roster.ActiveHoursEnd == nil {
+		// No active hours configured — use handoff-based 12-hour window.
+		return s.isInHandoffWindow(roster, at)
+	}
+
 	loc, err := time.LoadLocation(roster.Timezone)
 	if err != nil {
 		return false
 	}
+	localTime := at.In(loc)
+	start, err := time.Parse("15:04", *roster.ActiveHoursStart)
+	if err != nil {
+		return false
+	}
+	end, err := time.Parse("15:04", *roster.ActiveHoursEnd)
+	if err != nil {
+		return false
+	}
 
+	startMin := start.Hour()*60 + start.Minute()
+	endMin := end.Hour()*60 + end.Minute()
+	currentMin := localTime.Hour()*60 + localTime.Minute()
+
+	if endMin > startMin {
+		return currentMin >= startMin && currentMin < endMin
+	}
+	// Wraps past midnight.
+	return currentMin >= startMin || currentMin < endMin
+}
+
+func (s *Service) isInHandoffWindow(roster RosterResponse, at time.Time) bool {
+	loc, err := time.LoadLocation(roster.Timezone)
+	if err != nil {
+		return false
+	}
 	localTime := at.In(loc)
 	handoff, err := time.Parse("15:04", roster.HandoffTime)
 	if err != nil {
 		return false
 	}
 
-	handoffHour := handoff.Hour()*60 + handoff.Minute()
+	handoffMin := handoff.Hour()*60 + handoff.Minute()
 	currentMin := localTime.Hour()*60 + localTime.Minute()
 
-	// 12-hour shift window from handoff time.
-	shiftEnd := handoffHour + 12*60
+	shiftEnd := handoffMin + 12*60
 	if shiftEnd >= 24*60 {
-		// Wraps past midnight.
-		return currentMin >= handoffHour || currentMin < (shiftEnd-24*60)
+		return currentMin >= handoffMin || currentMin < (shiftEnd-24*60)
 	}
-	return currentMin >= handoffHour && currentMin < shiftEnd
-}
-
-// --- Parsing helpers ---
-
-func parseHandoffTime(s string) (pgtype.Time, error) {
-	t, err := time.Parse("15:04", s)
-	if err != nil {
-		return pgtype.Time{}, err
-	}
-	us := int64(t.Hour())*3600000000 + int64(t.Minute())*60000000
-	return pgtype.Time{Microseconds: us, Valid: true}, nil
-}
-
-func parseDate(s string) (pgtype.Date, error) {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return pgtype.Date{}, err
-	}
-	return pgtype.Date{Time: t, Valid: true}, nil
+	return currentMin >= handoffMin && currentMin < shiftEnd
 }
