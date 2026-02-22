@@ -22,10 +22,14 @@ internal/db/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~
 .DS_Store
+
+# WSL metadata
+*:Zone.Identifier
 
 # Environment
 .env

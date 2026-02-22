@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-NightOwl is an incident knowledge base, alert management, on-call roster, and escalation platform for 24/7 operations teams. It is designed for managed service providers running Kubernetes infrastructure across multiple time zones.
+NightOwl (formerly OpsWatch) is an incident knowledge base, alert management, on-call roster, and escalation platform for 24/7 operations teams. It is designed for managed service providers running Kubernetes infrastructure across multiple time zones. NightOwl is a Wisbric product (wisbric.com).
 
 ## Specifications
 
@@ -13,6 +13,17 @@ All design decisions are captured in `docs/`. Always read the relevant spec befo
 - `docs/03-data-model.md` — PostgreSQL schema, queries, multi-tenancy strategy
 - `docs/04-integrations-workflow.md` — Slack, webhooks, Twilio, roster handoff flows
 - `docs/05-tasks.md` — Implementation task breakdown by phase
+- `docs/06-branding.md` — NightOwl branding, design system, color palette, typography
+- `docs/07-deployment.md` — CI/CD pipeline, container builds, Helm deployment guide
+
+## Branding
+
+The product is called **NightOwl**. The frontend must follow the design system in `docs/06-branding.md`. Key points:
+- Dark mode is the default
+- Use the NightOwl color palette (navy primary, owl-gold accent, severity colors)
+- Inter font for UI, JetBrains Mono for code/alerts
+- Sidebar navigation layout
+- Footer: "A Wisbric product"
 
 ## Tech Stack
 
