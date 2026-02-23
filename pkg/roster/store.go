@@ -527,6 +527,43 @@ func (s *Store) CountPrimaryWeeks(ctx context.Context, rosterID, userID uuid.UUI
 	return count, err
 }
 
+// CountSecondaryWeeks counts how many weeks a user has been secondary for a roster.
+func (s *Store) CountSecondaryWeeks(ctx context.Context, rosterID, userID uuid.UUID) (int, error) {
+	var count int
+	err := s.dbtx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM roster_schedule WHERE roster_id = $1 AND secondary_user_id = $2`,
+		rosterID, userID).Scan(&count)
+	return count, err
+}
+
+// ListOverridesInRange lists overrides for a roster within a time range.
+func (s *Store) ListOverridesInRange(ctx context.Context, rosterID uuid.UUID, from, to time.Time) ([]OverrideResponse, error) {
+	query := `SELECT ro.id, ro.roster_id, ro.user_id, COALESCE(u.display_name, ro.user_id::text),
+	                 ro.start_at, ro.end_at, ro.reason, ro.created_by, ro.created_at
+	          FROM roster_overrides ro
+	          LEFT JOIN users u ON u.id = ro.user_id
+	          WHERE ro.roster_id = $1 AND ro.end_at > $2 AND ro.start_at < $3
+	          ORDER BY ro.start_at`
+	rows, err := s.dbtx.Query(ctx, query, rosterID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("listing overrides in range: %w", err)
+	}
+	defer rows.Close()
+
+	var result []OverrideResponse
+	for rows.Next() {
+		var o OverrideResponse
+		var createdBy pgtype.UUID
+		if err := rows.Scan(&o.ID, &o.RosterID, &o.UserID, &o.DisplayName,
+			&o.StartAt, &o.EndAt, &o.Reason, &createdBy, &o.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scanning override row: %w", err)
+		}
+		o.CreatedBy = pgtypeUUIDToPtr(createdBy)
+		result = append(result, o)
+	}
+	return result, nil
+}
+
 // =====================
 // Override operations (unchanged)
 // =====================

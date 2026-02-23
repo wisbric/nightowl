@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { Roster, RostersResponse, OnCallResponse, UsersResponse } from "@/types/api";
+import { CoverageHeatmap } from "@/components/coverage-heatmap";
 import { Globe, Calendar, Plus } from "lucide-react";
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -117,6 +118,8 @@ export function RosterListPage() {
           </Button>
         </Link>
       </div>
+
+      <CoverageHeatmap />
 
       <Card>
         <CardHeader>

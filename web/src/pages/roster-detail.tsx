@@ -22,9 +22,24 @@ import type {
   ScheduleResponse,
   ScheduleEntry,
 } from "@/types/api";
-import { Calendar, Trash2, Lock, Unlock, Pencil, RefreshCw } from "lucide-react";
+import { Calendar, Trash2, Lock, Unlock, Pencil, RefreshCw, Settings } from "lucide-react";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function formatInTimezone(dateStr: string, tz: string): string {
+  try {
+    return new Date(dateStr).toLocaleString("en-US", {
+      timeZone: tz,
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return new Date(dateStr).toLocaleString();
+  }
+}
 
 interface RosterForm {
   name: string;
@@ -97,6 +112,7 @@ export function RosterDetailPage() {
   const [showRegenerate, setShowRegenerate] = useState(false);
   const [regenerateWeeks, setRegenerateWeeks] = useState("12");
   const [deactivateConfirm, setDeactivateConfirm] = useState<{ userId: string; name: string } | null>(null);
+  const [editSettings, setEditSettings] = useState(false);
 
   const { data: roster, isLoading } = useQuery({
     queryKey: ["roster", rosterId],
@@ -150,6 +166,24 @@ export function RosterDetailPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rosters"] });
+    },
+  });
+
+  const updateRosterMutation = useMutation({
+    mutationFn: (data: RosterForm) =>
+      api.put<Roster>(`/rosters/${rosterId}`, {
+        name: data.name,
+        timezone: data.timezone,
+        handoff_time: data.handoff_time,
+        handoff_day: parseInt(data.handoff_day, 10),
+        schedule_weeks_ahead: parseInt(data.schedule_weeks_ahead, 10),
+        max_consecutive_weeks: parseInt(data.max_consecutive_weeks, 10),
+        end_date: data.end_date || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roster", rosterId] });
+      queryClient.invalidateQueries({ queryKey: ["rosters"] });
+      setEditSettings(false);
     },
   });
 
@@ -324,14 +358,35 @@ export function RosterDetailPage() {
             {roster.timezone} &middot; Handoff: {DAYS[roster.handoff_day]} {roster.handoff_time}
           </p>
         </div>
-        <a
-          href={`/api/v1/rosters/${rosterId}/export.ics`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          download
-        >
-          <Calendar className="h-4 w-4" />
-          Export iCal
-        </a>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setRosterForm({
+                name: roster.name,
+                timezone: roster.timezone,
+                handoff_time: roster.handoff_time,
+                handoff_day: String(roster.handoff_day),
+                schedule_weeks_ahead: String(roster.schedule_weeks_ahead),
+                max_consecutive_weeks: String(roster.max_consecutive_weeks),
+                end_date: roster.end_date ?? "",
+              });
+              setEditSettings(true);
+            }}
+          >
+            <Settings className="h-4 w-4 mr-1" />
+            Edit Settings
+          </Button>
+          <a
+            href={`/api/v1/rosters/${rosterId}/export.ics`}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            download
+          >
+            <Calendar className="h-4 w-4" />
+            Export iCal
+          </a>
+        </div>
       </div>
 
       {/* On-Call Now */}
@@ -539,6 +594,63 @@ export function RosterDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Fairness Report */}
+      {activeMembers.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Fairness Report</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member</TableHead>
+                  <TableHead className="text-right">Primary</TableHead>
+                  <TableHead className="text-right">Secondary</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead>Distribution</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activeMembers.map((m) => {
+                  const total = m.primary_weeks_served + m.secondary_weeks_served;
+                  const maxWeeks = Math.max(...activeMembers.map((am) => am.primary_weeks_served + am.secondary_weeks_served), 1);
+                  const pct = maxWeeks > 0 ? Math.round((total / maxWeeks) * 100) : 0;
+                  return (
+                    <TableRow key={m.id}>
+                      <TableCell className="text-sm font-medium">{m.display_name}</TableCell>
+                      <TableCell className="text-sm text-right">{m.primary_weeks_served}</TableCell>
+                      <TableCell className="text-sm text-right">{m.secondary_weeks_served}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{total}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-accent"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            {(() => {
+              const counts = activeMembers.map((m) => m.primary_weeks_served);
+              const max = Math.max(...counts);
+              const min = Math.min(...counts);
+              const isEven = max - min <= 1;
+              return (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Primary distribution: {isEven ? "Even" : `${min}–${max} weeks (${max - min} spread)`}
+                  {isEven && " \u2713"}
+                </p>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Overrides */}
       <Card>
         <CardHeader><CardTitle>Overrides ({overrides.length})</CardTitle></CardHeader>
@@ -558,8 +670,8 @@ export function RosterDetailPage() {
                 {overrides.map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="text-sm font-medium">{o.display_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(o.start_at).toLocaleString()}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(o.end_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatInTimezone(o.start_at, roster.timezone)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatInTimezone(o.end_at, roster.timezone)}</TableCell>
                     <TableCell className="text-sm">{o.reason || "\u2014"}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon" onClick={() => deleteOverrideMutation.mutate(o.id)} disabled={deleteOverrideMutation.isPending}>
@@ -709,6 +821,67 @@ export function RosterDetailPage() {
             onClick={() => regenerateMutation.mutate(parseInt(regenerateWeeks, 10))}
           >
             {regenerateMutation.isPending ? "Regenerating..." : "Regenerate"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Edit Settings Dialog */}
+      <Dialog open={editSettings} onClose={() => setEditSettings(false)}>
+        <DialogHeader>
+          <DialogTitle>Edit Roster Settings</DialogTitle>
+        </DialogHeader>
+        <DialogContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Name</label>
+              <Input value={rosterForm.name} onChange={(e) => setRosterForm({ ...rosterForm, name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Timezone</label>
+              <Select value={rosterForm.timezone} onChange={(e) => setRosterForm({ ...rosterForm, timezone: e.target.value })} required>
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium">Handoff Day</label>
+              <Select value={rosterForm.handoff_day} onChange={(e) => setRosterForm({ ...rosterForm, handoff_day: e.target.value })}>
+                {DAYS.map((d, i) => <option key={i} value={String(i)}>{d}</option>)}
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Handoff Time</label>
+              <Input type="time" value={rosterForm.handoff_time} onChange={(e) => setRosterForm({ ...rosterForm, handoff_time: e.target.value })} required />
+              <p className="text-xs text-muted-foreground mt-1">In roster timezone</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">End Date</label>
+              <Input type="date" value={rosterForm.end_date} onChange={(e) => setRosterForm({ ...rosterForm, end_date: e.target.value })} />
+              <p className="text-xs text-muted-foreground mt-1">Leave empty for perpetual</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Weeks Ahead</label>
+              <Input type="number" min="1" max="52" value={rosterForm.schedule_weeks_ahead} onChange={(e) => setRosterForm({ ...rosterForm, schedule_weeks_ahead: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Max Consecutive Weeks</label>
+              <Input type="number" min="1" max="12" value={rosterForm.max_consecutive_weeks} onChange={(e) => setRosterForm({ ...rosterForm, max_consecutive_weeks: e.target.value })} />
+            </div>
+          </div>
+          {updateRosterMutation.isError && (
+            <p className="text-sm text-destructive">Error: {updateRosterMutation.error?.message ?? "Failed"}</p>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEditSettings(false)}>Cancel</Button>
+          <Button
+            disabled={updateRosterMutation.isPending}
+            onClick={() => updateRosterMutation.mutate(rosterForm)}
+          >
+            {updateRosterMutation.isPending ? "Saving..." : "Save Settings"}
           </Button>
         </DialogFooter>
       </Dialog>

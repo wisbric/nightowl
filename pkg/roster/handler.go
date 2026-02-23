@@ -35,6 +35,7 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.handleCreateRoster)
 	r.Get("/", h.handleListRosters)
+	r.Get("/coverage", h.handleGetCoverage)
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.handleGetRoster)
 		r.Put("/", h.handleUpdateRoster)
@@ -610,6 +611,41 @@ func (h *Handler) handleDeleteOverride(w http.ResponseWriter, r *http.Request) {
 // =====================
 // Calendar export
 // =====================
+
+func (h *Handler) handleGetCoverage(w http.ResponseWriter, r *http.Request) {
+	from := time.Now().UTC().Truncate(24 * time.Hour)
+	to := from.AddDate(0, 0, 14)
+	resolution := 60
+
+	if v := r.URL.Query().Get("from"); v != "" {
+		if parsed, err := time.Parse(time.RFC3339, v); err == nil {
+			from = parsed
+		}
+	}
+	if v := r.URL.Query().Get("to"); v != "" {
+		if parsed, err := time.Parse(time.RFC3339, v); err == nil {
+			to = parsed
+		}
+	}
+	if v := r.URL.Query().Get("resolution"); v != "" {
+		if n, err := fmt.Sscanf(v, "%d", &resolution); n == 1 && err == nil && resolution > 0 {
+			// valid
+		}
+	}
+
+	svc := h.service(r)
+	resp, err := svc.GetCoverage(r.Context(), CoverageRequest{
+		From:       from,
+		To:         to,
+		Resolution: resolution,
+	})
+	if err != nil {
+		h.logger.Error("getting coverage", "error", err)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to get coverage")
+		return
+	}
+	httpserver.Respond(w, http.StatusOK, resp)
+}
 
 func (h *Handler) handleExportICS(w http.ResponseWriter, r *http.Request) {
 	id, err := parseRosterID(r)

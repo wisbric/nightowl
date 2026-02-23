@@ -55,10 +55,12 @@ func (s *Service) ListMembers(ctx context.Context, rosterID uuid.UUID) ([]Member
 	if err != nil {
 		return nil, err
 	}
-	// Enrich with primary weeks served.
+	// Enrich with primary and secondary weeks served.
 	for i := range members {
-		count, _ := s.store.CountPrimaryWeeks(ctx, rosterID, members[i].UserID)
-		members[i].PrimaryWeeksServed = count
+		pCount, _ := s.store.CountPrimaryWeeks(ctx, rosterID, members[i].UserID)
+		members[i].PrimaryWeeksServed = pCount
+		sCount, _ := s.store.CountSecondaryWeeks(ctx, rosterID, members[i].UserID)
+		members[i].SecondaryWeeksServed = sCount
 	}
 	return members, nil
 }
@@ -229,6 +231,174 @@ func (s *Service) resolveOnCall(ctx context.Context, roster RosterResponse, at t
 	// 3. Unassigned.
 	resp.Source = "unassigned"
 	return resp, nil
+}
+
+// --- Coverage ---
+
+// GetCoverage computes hourly coverage slots across all active rosters.
+func (s *Service) GetCoverage(ctx context.Context, req CoverageRequest) (*CoverageResponse, error) {
+	rosters, err := s.store.ListRosters(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing rosters: %w", err)
+	}
+
+	resolution := req.Resolution
+	if resolution <= 0 {
+		resolution = 60
+	}
+
+	resp := &CoverageResponse{
+		From:              req.From,
+		To:                req.To,
+		ResolutionMinutes: resolution,
+	}
+
+	// Build roster info.
+	var activeRosters []RosterResponse
+	for _, r := range rosters {
+		if !r.IsActive {
+			continue
+		}
+		resp.Rosters = append(resp.Rosters, CoverageRoster{
+			ID:               r.ID,
+			Name:             r.Name,
+			Timezone:         r.Timezone,
+			ActiveHoursStart: r.ActiveHoursStart,
+			ActiveHoursEnd:   r.ActiveHoursEnd,
+			IsFollowTheSun:   r.IsFollowTheSun,
+		})
+		activeRosters = append(activeRosters, r)
+	}
+
+	if len(activeRosters) == 0 {
+		resp.Slots = []CoverageSlot{}
+		resp.Rosters = []CoverageRoster{}
+		return resp, nil
+	}
+
+	// Pre-fetch schedule and override data per roster.
+	cache := make(map[uuid.UUID]*coverageCache)
+	for _, r := range activeRosters {
+		sched, _ := s.store.ListSchedule(ctx, r.ID, req.From.AddDate(0, 0, -7), req.To)
+		overrides, _ := s.store.ListOverridesInRange(ctx, r.ID, req.From, req.To)
+		cache[r.ID] = &coverageCache{schedule: sched, overrides: overrides}
+	}
+
+	// Generate time slots.
+	var totalGapMinutes int
+	var gaps []GapInfo
+	var inGap bool
+	var gapStart time.Time
+
+	for t := req.From; t.Before(req.To); t = t.Add(time.Duration(resolution) * time.Minute) {
+		slot := CoverageSlot{Time: t}
+
+		for _, r := range activeRosters {
+			if !s.isRosterActiveAt(r, t) {
+				continue
+			}
+
+			rc := cache[r.ID]
+			primary, secondary, source := s.resolveFromCache(rc, r.ID, t)
+			slot.Coverage = append(slot.Coverage, CoverageSlotRoster{
+				RosterID:   r.ID,
+				RosterName: r.Name,
+				Primary:    primary,
+				Secondary:  secondary,
+				Source:      source,
+			})
+		}
+
+		slot.Gap = len(slot.Coverage) == 0
+		if slot.Coverage == nil {
+			slot.Coverage = []CoverageSlotRoster{}
+		}
+		resp.Slots = append(resp.Slots, slot)
+
+		// Track gaps.
+		if slot.Gap {
+			if !inGap {
+				inGap = true
+				gapStart = t
+			}
+		} else if inGap {
+			inGap = false
+			gapEnd := t
+			dur := gapEnd.Sub(gapStart)
+			totalGapMinutes += int(dur.Minutes())
+			gaps = append(gaps, GapInfo{
+				Start:         gapStart,
+				End:           gapEnd,
+				DurationHours: dur.Hours(),
+			})
+		}
+	}
+	if inGap {
+		gapEnd := req.To
+		dur := gapEnd.Sub(gapStart)
+		totalGapMinutes += int(dur.Minutes())
+		gaps = append(gaps, GapInfo{
+			Start:         gapStart,
+			End:           gapEnd,
+			DurationHours: dur.Hours(),
+		})
+	}
+
+	if gaps == nil {
+		gaps = []GapInfo{}
+	}
+	resp.GapSummary = GapSummary{
+		TotalGapHours: float64(totalGapMinutes) / 60.0,
+		Gaps:          gaps,
+	}
+
+	return resp, nil
+}
+
+// isRosterActiveAt checks if a roster should be providing coverage at a given time.
+func (s *Service) isRosterActiveAt(r RosterResponse, at time.Time) bool {
+	if !r.IsFollowTheSun {
+		// Non-FTS rosters cover 24h.
+		return true
+	}
+	return s.isInActiveHours(r, at)
+}
+
+// resolveFromCache resolves who's on-call from pre-fetched data.
+type coverageCache struct {
+	schedule  []ScheduleEntry
+	overrides []OverrideResponse
+}
+
+func (s *Service) resolveFromCache(rc *coverageCache, rosterID uuid.UUID, at time.Time) (primary, secondary, source string) {
+	// Check overrides.
+	for _, o := range rc.overrides {
+		if !at.Before(o.StartAt) && at.Before(o.EndAt) {
+			return o.DisplayName, "", "override"
+		}
+	}
+
+	// Check schedule.
+	for _, e := range rc.schedule {
+		ws, _ := time.Parse("2006-01-02", e.WeekStart)
+		we, _ := time.Parse("2006-01-02", e.WeekEnd)
+		if !at.Before(ws) && at.Before(we) {
+			p := ""
+			if e.PrimaryDisplayName != "" {
+				p = e.PrimaryDisplayName
+			}
+			sec := ""
+			if e.SecondaryDisplayName != "" {
+				sec = e.SecondaryDisplayName
+			}
+			if p == "" {
+				return "", "", "unassigned"
+			}
+			return p, sec, "schedule"
+		}
+	}
+
+	return "", "", "unassigned"
 }
 
 // getFollowTheSunOnCall determines which sub-roster is active based on active hours.

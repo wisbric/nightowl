@@ -121,6 +121,52 @@ export interface RosterMember {
   joined_at: string;
   left_at?: string;
   primary_weeks_served: number;
+  secondary_weeks_served: number;
+}
+
+// --- Coverage types ---
+
+export interface CoverageResponse {
+  from: string;
+  to: string;
+  resolution_minutes: number;
+  rosters: CoverageRoster[];
+  slots: CoverageSlot[];
+  gap_summary: GapSummary;
+}
+
+export interface CoverageRoster {
+  id: string;
+  name: string;
+  timezone: string;
+  active_hours_start?: string;
+  active_hours_end?: string;
+  is_follow_the_sun: boolean;
+}
+
+export interface CoverageSlot {
+  time: string;
+  coverage: CoverageSlotRoster[];
+  gap: boolean;
+}
+
+export interface CoverageSlotRoster {
+  roster_id: string;
+  roster_name: string;
+  primary: string;
+  secondary?: string;
+  source: string;
+}
+
+export interface GapSummary {
+  total_gap_hours: number;
+  gaps: GapInfo[];
+}
+
+export interface GapInfo {
+  start: string;
+  end: string;
+  duration_hours: number;
 }
 
 export interface MembersResponse {

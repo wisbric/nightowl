@@ -81,7 +81,8 @@ type MemberResponse struct {
 	IsActive            bool       `json:"is_active"`
 	JoinedAt            time.Time  `json:"joined_at"`
 	LeftAt              *time.Time `json:"left_at,omitempty"`
-	PrimaryWeeksServed  int        `json:"primary_weeks_served"`
+	PrimaryWeeksServed   int        `json:"primary_weeks_served"`
+	SecondaryWeeksServed int        `json:"secondary_weeks_served"`
 }
 
 // --- Schedule types ---
@@ -157,6 +158,64 @@ type OnCallResponse struct {
 type OnCallEntry struct {
 	UserID      uuid.UUID `json:"user_id"`
 	DisplayName string    `json:"display_name"`
+}
+
+// --- Coverage types ---
+
+// CoverageRequest holds parameters for the coverage endpoint.
+type CoverageRequest struct {
+	From       time.Time
+	To         time.Time
+	Resolution int // minutes per slot, default 60
+}
+
+// CoverageResponse is the JSON response for GET /rosters/coverage.
+type CoverageResponse struct {
+	From              time.Time        `json:"from"`
+	To                time.Time        `json:"to"`
+	ResolutionMinutes int              `json:"resolution_minutes"`
+	Rosters           []CoverageRoster `json:"rosters"`
+	Slots             []CoverageSlot   `json:"slots"`
+	GapSummary        GapSummary       `json:"gap_summary"`
+}
+
+// CoverageRoster summarises a roster for coverage context.
+type CoverageRoster struct {
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	Timezone         string    `json:"timezone"`
+	ActiveHoursStart *string   `json:"active_hours_start,omitempty"`
+	ActiveHoursEnd   *string   `json:"active_hours_end,omitempty"`
+	IsFollowTheSun   bool      `json:"is_follow_the_sun"`
+}
+
+// CoverageSlot is one time slot in the coverage heatmap.
+type CoverageSlot struct {
+	Time     time.Time              `json:"time"`
+	Coverage []CoverageSlotRoster   `json:"coverage"`
+	Gap      bool                   `json:"gap"`
+}
+
+// CoverageSlotRoster describes a roster's coverage during a slot.
+type CoverageSlotRoster struct {
+	RosterID   uuid.UUID `json:"roster_id"`
+	RosterName string    `json:"roster_name"`
+	Primary    string    `json:"primary"`
+	Secondary  string    `json:"secondary,omitempty"`
+	Source     string    `json:"source"`
+}
+
+// GapSummary describes coverage gaps.
+type GapSummary struct {
+	TotalGapHours float64   `json:"total_gap_hours"`
+	Gaps          []GapInfo `json:"gaps"`
+}
+
+// GapInfo describes a single coverage gap.
+type GapInfo struct {
+	Start         time.Time `json:"start"`
+	End           time.Time `json:"end"`
+	DurationHours float64   `json:"duration_hours"`
 }
 
 // --- Helpers ---

@@ -205,6 +205,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 func runWorker(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry) error {
 	logger.Info("worker started")
 
+	// Schedule top-up: runs once at start, then every 6 hours.
+	go roster.RunScheduleTopUpLoop(ctx, pool, logger, 6*time.Hour)
+
 	engine := escalation.NewEngine(pool, rdb, logger, telemetry.AlertsEscalatedTotal)
 	return engine.Run(ctx)
 }

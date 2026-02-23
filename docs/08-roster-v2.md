@@ -588,16 +588,211 @@ Read docs/08-roster-v2.md and implement the roster v2 schedule system:
 
 7. Update iCal export and Slack oncall command
 
-8. Update seed-demo data to include schedule entries
+8. Coverage graph: implement GET /api/v1/rosters/coverage endpoint 
+   (section 9.2) and SVG heatmap component on the roster list page 
+   showing 14-day coverage with gap detection (section 9.3-9.4)
 
-9. Backfill migration: convert any existing roster data to schedule entries
+9. Update seed-demo data to include schedule entries and 
+   follow-the-sun rosters with realistic timezone coverage
+
+10. Backfill migration: convert any existing roster data to schedule entries
 
 Build, test, fix, and commit when green.
 ```
 
 ---
 
-## 9. Acceptance Criteria
+## 9. Coverage Graph
+
+### 9.1 Purpose
+
+The roster list page (all rosters) shows a **coverage heatmap** for the next 14 days. This visualizes which hours of the day are covered by at least one roster, and highlights gaps where no one is on-call. Critical for validating follow-the-sun setups.
+
+### 9.2 API Endpoint
+
+```
+GET /api/v1/rosters/coverage
+    ?from=2026-02-24T00:00:00Z
+    &to=2026-03-10T00:00:00Z
+    &resolution=1h           (optional, default: 1h)
+
+Response:
+{
+  "from": "2026-02-24T00:00:00Z",
+  "to": "2026-03-10T00:00:00Z",
+  "resolution_minutes": 60,
+  "rosters": [
+    {
+      "id": "uuid",
+      "name": "DE On-Call",
+      "timezone": "Europe/Berlin",
+      "active_hours_start": "08:00",
+      "active_hours_end": "20:00",
+      "is_follow_the_sun": true
+    },
+    {
+      "id": "uuid",
+      "name": "NZ On-Call",
+      "timezone": "Pacific/Auckland",
+      "active_hours_start": "08:00",
+      "active_hours_end": "20:00",
+      "is_follow_the_sun": true
+    }
+  ],
+  "slots": [
+    {
+      "time": "2026-02-24T00:00:00Z",
+      "coverage": [
+        {
+          "roster_id": "uuid",
+          "roster_name": "NZ On-Call",
+          "primary": "Jamie R.",
+          "secondary": "Chris T.",
+          "source": "schedule"
+        }
+      ],
+      "gap": false
+    },
+    {
+      "time": "2026-02-24T01:00:00Z",
+      "coverage": [],
+      "gap": true
+    }
+  ],
+  "gap_summary": {
+    "total_gap_hours": 4,
+    "gaps": [
+      {
+        "start": "2026-02-25T20:00:00+13:00",
+        "end": "2026-02-25T08:00:00+01:00",
+        "duration_hours": 4,
+        "note": "NZ ends 20:00 NZDT, DE starts 08:00 CET — 4h gap"
+      }
+    ]
+  }
+}
+```
+
+**Logic per time slot:**
+1. For each active roster, check: is this hour within `active_hours_start`–`active_hours_end` in the roster's timezone?
+2. If yes, look up who's on-call (override → schedule → unassigned)
+3. If no roster covers this hour → `gap: true`
+4. For non-follow-the-sun rosters (no active hours defined), they cover 24h — every hour within their schedule is covered
+
+### 9.3 Frontend — Roster List Page
+
+The coverage graph sits at the top of the roster list page, above the roster cards.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ROSTERS                                              [+ New Roster] │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  COVERAGE — Next 14 Days                                             │
+│                                                                      │
+│  Timezone: UTC                                            [▾ UTC  ]  │
+│                                                                      │
+│        00  02  04  06  08  10  12  14  16  18  20  22               │
+│  Mon   ░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░               │
+│  24    NZ──────────────────  DE──────────────────                    │
+│  Tue   ░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░               │
+│  25    NZ──────────────────  DE──────────────────                    │
+│  Wed   ░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░               │
+│  26    NZ──────────────────  DE──────────────────                    │
+│  ...                                                                 │
+│                                                                      │
+│  Legend:  ▓ Covered (hover for details)                              │
+│           ░ Gap — no roster active          ⚠ 4h gap/day            │
+│           █ Multiple rosters (overlap)                               │
+│                                                                      │
+│  ⚠ Daily gap: 20:00–00:00 UTC (NZ ends before DE starts)           │
+│    Consider extending NZ hours or adding an overnight roster.        │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─ DE On-Call ──────────────────────────────────────┐               │
+│  │  Europe/Berlin · Mon 09:00 handoff · 4 members    │               │
+│  │  🟢 Primary: Stefan K.  🔵 Secondary: Max M.     │               │
+│  │  Next handoff: Mon Mar 03 09:00 CET               │               │
+│  └───────────────────────────────────────────────────┘               │
+│                                                                      │
+│  ┌─ NZ On-Call ──────────────────────────────────────┐               │
+│  │  Pacific/Auckland · Mon 09:00 handoff · 3 members │               │
+│  │  🟢 Primary: Jamie R.  🔵 Secondary: Chris T.    │               │
+│  │  Next handoff: Mon Mar 03 09:00 NZDT              │               │
+│  └───────────────────────────────────────────────────┘               │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.4 Graph Component Details
+
+**Implementation:** React component using either:
+- SVG-based heatmap (preferred — lightweight, precise control)
+- or a `<canvas>` grid
+
+**Layout:**
+- X-axis: 24 hours (00:00–23:59) in the selected display timezone
+- Y-axis: one row per day (14 days)
+- Each cell: 1 hour × 1 day
+
+**Cell colors (follow NightOwl branding):**
+- **Covered (single roster):** `owl-gold` (#D97706) at 60% opacity
+- **Covered (multiple rosters overlap):** `owl-gold` at 100% opacity
+- **Gap:** Navy dark (#0F172A) with subtle red border or red hatching
+- **Unassigned (roster active but no one scheduled):** Warning amber with `?` indicator
+
+**Hover tooltip:**
+```
+┌─────────────────────────────────────┐
+│ Tue Feb 25, 14:00–15:00 UTC        │
+│                                     │
+│ DE On-Call                          │
+│   Primary: Stefan K.               │
+│   Secondary: Max M.                │
+│   Source: Schedule (Week of Feb 24) │
+└─────────────────────────────────────┘
+```
+
+Gap hover:
+```
+┌─────────────────────────────────────┐
+│ Tue Feb 25, 21:00–22:00 UTC        │
+│                                     │
+│ ⚠ No roster active                 │
+│ NZ On-Call ended at 20:00 UTC       │
+│ DE On-Call starts at 00:00 UTC      │
+└─────────────────────────────────────┘
+```
+
+**Timezone selector:** Dropdown to view the graph in UTC, or any roster's local timezone. Default: UTC (neutral ground for multi-timezone teams).
+
+**Gap alert banner:** If any gaps exist in the 14-day window, show a warning banner below the graph summarizing the pattern ("4h daily gap between 20:00–00:00 UTC") with a suggestion.
+
+### 9.5 Edge Cases
+
+- **No follow-the-sun rosters:** Each roster covers 24h. Graph shows full coverage per roster, likely overlapping.
+- **Single roster, no follow-the-sun:** Full 24h coverage, no gaps possible (unless unassigned weeks).
+- **Roster with no active hours defined:** Treated as 24h coverage during scheduled weeks.
+- **Override during a gap:** If an override exists during what would be a gap, the gap is filled.
+- **Unassigned week:** Roster is active (has active hours) but no one is scheduled. Show as amber "unassigned" — different from a gap where no roster is active at all.
+
+### 9.6 Acceptance Criteria
+
+- [ ] Coverage graph renders on roster list page for next 14 days
+- [ ] Gaps clearly visible with distinct color/pattern
+- [ ] Hover shows which roster(s) cover each hour and who's on-call
+- [ ] Timezone selector switches display timezone
+- [ ] Gap summary banner shows recurring patterns
+- [ ] Single-roster (24h) setups show no gaps
+- [ ] Overrides fill gaps when applicable
+- [ ] Unassigned weeks shown differently from true gaps
+- [ ] Graph responsive on smaller screens (horizontal scroll if needed)
+
+---
+
+## 10. Acceptance Criteria
 
 - [ ] Schedule table shows 12 weeks of future primary/secondary assignments
 - [ ] Clicking edit on a week opens dialog to change primary/secondary
@@ -612,3 +807,7 @@ Build, test, fix, and commit when green.
 - [ ] Dashboard widget shows current week's schedule
 - [ ] Past weeks are dimmed and not editable
 - [ ] Empty roster (0 members) shows warning, not error
+- [ ] Coverage heatmap on roster list page shows 14-day coverage
+- [ ] Gaps between follow-the-sun rosters clearly highlighted
+- [ ] Timezone selector on coverage graph
+- [ ] Gap summary banner with actionable suggestion
