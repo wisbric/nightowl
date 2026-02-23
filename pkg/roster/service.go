@@ -166,11 +166,9 @@ func (s *Service) GetOnCall(ctx context.Context, rosterID uuid.UUID, at time.Tim
 		return nil, fmt.Errorf("getting roster: %w", err)
 	}
 
-	// Follow-the-sun: delegate to the active sub-roster.
-	if roster.IsFollowTheSun && roster.LinkedRosterID != nil {
-		return s.getFollowTheSunOnCall(ctx, roster, at)
-	}
-
+	// Always resolve from this roster's own schedule.
+	// Follow-the-sun delegation is handled by the escalation engine,
+	// not the per-roster on-call endpoint.
 	return s.resolveOnCall(ctx, roster, at)
 }
 
