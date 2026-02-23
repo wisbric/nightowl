@@ -60,7 +60,9 @@ func (s *Service) Create(ctx context.Context, req CreateRequest, userID pgtype.U
 		s.logger.Warn("failed to record incident creation history", "error", histErr, "incident_id", row.ID)
 	}
 
-	return row.ToResponse(), nil
+	resp := row.ToResponse()
+	s.enrichRunbook(ctx, &resp)
+	return resp, nil
 }
 
 // Get returns an incident with its change history.
@@ -78,8 +80,10 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (DetailResponse, error)
 		history = []HistoryEntry{}
 	}
 
+	resp := row.ToResponse()
+	s.enrichRunbook(ctx, &resp)
 	return DetailResponse{
-		Response: row.ToResponse(),
+		Response: resp,
 		History:  history,
 	}, nil
 }
@@ -116,7 +120,9 @@ func (s *Service) List(ctx context.Context, filters ListFilters, limit, offset i
 
 	items := make([]Response, 0, len(rows))
 	for i := range rows {
-		items = append(items, rows[i].ToResponse())
+		resp := rows[i].ToResponse()
+		s.enrichRunbook(ctx, &resp)
+		items = append(items, resp)
 	}
 	return items, count, nil
 }
@@ -142,7 +148,9 @@ func (s *Service) GetByFingerprint(ctx context.Context, fingerprint string) (Res
 	if err != nil {
 		return Response{}, fmt.Errorf("getting incident by fingerprint: %w", err)
 	}
-	return row.ToResponse(), nil
+	resp := row.ToResponse()
+	s.enrichRunbook(ctx, &resp)
+	return resp, nil
 }
 
 // Update updates an incident, computes the diff, and records a history entry.
@@ -187,7 +195,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest, u
 		}
 	}
 
-	return updated.ToResponse(), nil
+	resp := updated.ToResponse()
+	s.enrichRunbook(ctx, &resp)
+	return resp, nil
 }
 
 // Delete performs a soft delete (archive) of an incident.
@@ -283,7 +293,9 @@ func (s *Service) Merge(ctx context.Context, targetID, sourceID uuid.UUID, userI
 		s.logger.Warn("failed to record merge history on source", "error", histErr, "incident_id", sourceID)
 	}
 
-	return updated.ToResponse(), nil
+	resp := updated.ToResponse()
+	s.enrichRunbook(ctx, &resp)
+	return resp, nil
 }
 
 // unionSlice returns the deduplicated union of two string slices, preserving order.
@@ -362,6 +374,20 @@ func computeDiff(old, new IncidentRow) map[string]any {
 	addIfChanged("runbook_id", old.RunbookID, new.RunbookID)
 
 	return diff
+}
+
+// enrichRunbook populates RunbookTitle and RunbookContent on a Response if it has a RunbookID.
+func (s *Service) enrichRunbook(ctx context.Context, resp *Response) {
+	if resp.RunbookID == nil {
+		return
+	}
+	rb, err := s.store.GetRunbookSummary(ctx, *resp.RunbookID)
+	if err != nil {
+		s.logger.Warn("failed to fetch linked runbook", "error", err, "runbook_id", resp.RunbookID)
+		return
+	}
+	resp.RunbookTitle = &rb.Title
+	resp.RunbookContent = &rb.Content
 }
 
 // defaultSlice returns s if non-nil, otherwise an empty string slice.

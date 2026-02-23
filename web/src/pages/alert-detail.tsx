@@ -114,10 +114,17 @@ export function AlertDetailPage() {
             ) : (
               <p className="text-muted-foreground">No KB match found</p>
             )}
+            {alert.runbook_url && (
+              <div>
+                <Link to={alert.runbook_url} className="inline-flex items-center gap-1.5 text-accent hover:underline text-sm">
+                  <span>📋</span> View Runbook
+                </Link>
+              </div>
+            )}
             {alert.suggested_solution && (
               <div>
                 <span className="text-muted-foreground">Suggested solution:</span>
-                <p className="mt-1 rounded-md bg-muted p-3">{alert.suggested_solution}</p>
+                <pre className="mt-1 rounded-md bg-muted p-3 text-sm whitespace-pre-wrap font-mono overflow-x-auto">{alert.suggested_solution}</pre>
               </div>
             )}
           </CardContent>

@@ -28,6 +28,7 @@ export interface SearchResult {
   solution: string;
   symptoms: string;
   root_cause: string;
+  runbook_id?: string | null;
   rank: number;
   title_highlight: string;
   symptoms_highlight: string;
@@ -59,6 +60,7 @@ export interface Alert {
   occurrence_count: number;
   matched_incident_id?: string;
   suggested_solution?: string;
+  runbook_url?: string;
   first_fired_at: string;
   last_fired_at: string;
   created_at: string;
@@ -80,6 +82,9 @@ export interface Incident {
   clusters: string[];
   namespaces: string[];
   environment: string;
+  runbook_id?: string | null;
+  runbook_title?: string | null;
+  runbook_content?: string | null;
   resolution_count: number;
   created_at: string;
   updated_at: string;

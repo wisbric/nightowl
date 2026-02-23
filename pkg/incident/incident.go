@@ -72,6 +72,8 @@ type Response struct {
 	RootCause         *string    `json:"root_cause"`
 	Solution          *string    `json:"solution"`
 	RunbookID         *uuid.UUID `json:"runbook_id,omitempty"`
+	RunbookTitle      *string    `json:"runbook_title,omitempty"`
+	RunbookContent    *string    `json:"runbook_content,omitempty"`
 	ResolutionCount   int32      `json:"resolution_count"`
 	LastResolvedAt    *time.Time `json:"last_resolved_at,omitempty"`
 	LastResolvedBy    *uuid.UUID `json:"last_resolved_by,omitempty"`

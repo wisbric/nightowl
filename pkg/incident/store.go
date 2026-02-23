@@ -278,6 +278,22 @@ func (s *Store) GetByFingerprint(ctx context.Context, fingerprint string) (Incid
 	return scanIncidentRow(row)
 }
 
+// RunbookSummary holds the title and content of a linked runbook.
+type RunbookSummary struct {
+	Title   string
+	Content string
+}
+
+// GetRunbookSummary returns the title and content for a runbook by ID.
+func (s *Store) GetRunbookSummary(ctx context.Context, id uuid.UUID) (*RunbookSummary, error) {
+	var rb RunbookSummary
+	err := s.dbtx.QueryRow(ctx, `SELECT title, content FROM runbooks WHERE id = $1`, id).Scan(&rb.Title, &rb.Content)
+	if err != nil {
+		return nil, err
+	}
+	return &rb, nil
+}
+
 // SetMergedInto marks the source incident as merged into the target.
 func (s *Store) SetMergedInto(ctx context.Context, sourceID, targetID uuid.UUID) error {
 	query := `UPDATE incidents SET merged_into_id = $2, updated_at = now()

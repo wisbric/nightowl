@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
@@ -14,8 +15,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident, IncidentHistoryEntry } from "@/types/api";
-import { useState } from "react";
+import type { Incident, IncidentHistoryEntry, RunbooksResponse, Runbook } from "@/types/api";
+import { BookOpen } from "lucide-react";
 
 interface IncidentForm {
   title: string;
@@ -24,6 +25,7 @@ interface IncidentForm {
   symptoms: string;
   root_cause: string;
   solution: string;
+  runbook_id: string;
   services: string;
   tags: string;
   error_patterns: string;
@@ -49,6 +51,12 @@ export function IncidentDetailPage() {
     enabled: !isNew,
   });
 
+  const { data: runbooksData } = useQuery({
+    queryKey: ["runbooks-all"],
+    queryFn: () => api.get<RunbooksResponse>("/runbooks?limit=200"),
+  });
+  const runbooks = runbooksData?.items ?? [];
+
   useTitle(isNew ? "New Incident" : incident?.title ?? "Incident");
 
   const { register, handleSubmit, reset } = useForm<IncidentForm>({
@@ -60,6 +68,7 @@ export function IncidentDetailPage() {
           symptoms: incident.symptoms ?? "",
           root_cause: incident.root_cause ?? "",
           solution: incident.solution ?? "",
+          runbook_id: incident.runbook_id ?? "",
           services: (incident.services ?? []).join(", "),
           tags: (incident.tags ?? []).join(", "),
           error_patterns: (incident.error_patterns ?? []).join("\n"),
@@ -71,6 +80,7 @@ export function IncidentDetailPage() {
     mutationFn: (data: IncidentForm) => {
       const body = {
         ...data,
+        runbook_id: data.runbook_id || null,
         services: data.services.split(",").map((s) => s.trim()).filter(Boolean),
         tags: data.tags.split(",").map((s) => s.trim()).filter(Boolean),
         error_patterns: data.error_patterns.split("\n").map((s) => s.trim()).filter(Boolean),
@@ -151,6 +161,17 @@ export function IncidentDetailPage() {
               <div>
                 <label className="text-sm font-medium">Solution</label>
                 <Textarea {...register("solution")} rows={5} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Linked Runbook (optional)</label>
+                <Select {...register("runbook_id")}>
+                  <option value="">No runbook</option>
+                  {runbooks.map((rb) => (
+                    <option key={rb.id} value={rb.id}>
+                      {rb.title}{rb.category ? ` (${rb.category})` : ""}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -246,6 +267,27 @@ export function IncidentDetailPage() {
             <CardHeader><CardTitle>Solution</CardTitle></CardHeader>
             <CardContent><p className="text-sm whitespace-pre-wrap">{incident.solution || "—"}</p></CardContent>
           </Card>
+
+          {incident.runbook_id && incident.runbook_title && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-accent" />
+                  <CardTitle>
+                    <Link to="/runbooks/$runbookId" params={{ runbookId: incident.runbook_id }} className="hover:text-accent transition-colors">
+                      {incident.runbook_title}
+                    </Link>
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">Runbook</Badge>
+                </div>
+              </CardHeader>
+              {incident.runbook_content && (
+                <CardContent>
+                  <pre className="text-sm whitespace-pre-wrap font-mono bg-muted rounded-md p-4 overflow-x-auto">{incident.runbook_content}</pre>
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           <div className="flex flex-wrap gap-4">
             {incident.services?.length > 0 && (

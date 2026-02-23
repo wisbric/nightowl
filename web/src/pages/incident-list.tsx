@@ -16,7 +16,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Incident, IncidentsResponse, SearchResponse, SearchResult } from "@/types/api";
-import { Search, Download } from "lucide-react";
+import { Search, Download, BookOpen } from "lucide-react";
 
 interface SearchRow {
   incident: Incident;
@@ -50,6 +50,7 @@ export function IncidentListPage() {
             category: r.category,
             services: r.services ?? [],
             tags: r.tags ?? [],
+            runbook_id: r.runbook_id,
             resolution_count: r.resolution_count,
             created_at: r.created_at,
             updated_at: r.created_at,
@@ -161,13 +162,18 @@ export function IncidentListPage() {
                   <TableRow key={inc.id}>
                     <TableCell><SeverityBadge severity={inc.severity} /></TableCell>
                     <TableCell>
-                      <Link to="/incidents/$incidentId" params={{ incidentId: inc.id }} className="text-sm hover:text-accent transition-colors">
-                        {highlights?.title_highlight ? (
-                          <span dangerouslySetInnerHTML={{ __html: highlights.title_highlight }} />
-                        ) : (
-                          inc.title
+                      <div className="flex items-center gap-1.5">
+                        <Link to="/incidents/$incidentId" params={{ incidentId: inc.id }} className="text-sm hover:text-accent transition-colors">
+                          {highlights?.title_highlight ? (
+                            <span dangerouslySetInnerHTML={{ __html: highlights.title_highlight }} />
+                          ) : (
+                            inc.title
+                          )}
+                        </Link>
+                        {inc.runbook_id && (
+                          <span title="Has linked runbook"><BookOpen className="h-3.5 w-3.5 text-accent shrink-0" /></span>
                         )}
-                      </Link>
+                      </div>
                       {highlights?.symptoms_highlight && (
                         <p
                           className="text-xs text-muted-foreground mt-1 line-clamp-2"

@@ -172,6 +172,9 @@ func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized
 			if result.SuggestedSolution != "" {
 				resp.SuggestedSolution = &result.SuggestedSolution
 			}
+			if result.RunbookURL != "" {
+				resp.RunbookURL = &result.RunbookURL
+			}
 			h.recordKBHit()
 		}
 	}

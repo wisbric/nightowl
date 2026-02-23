@@ -39,6 +39,7 @@ type Response struct {
 	Annotations       json.RawMessage `json:"annotations"`
 	MatchedIncidentID *uuid.UUID      `json:"matched_incident_id,omitempty"`
 	SuggestedSolution *string         `json:"suggested_solution,omitempty"`
+	RunbookURL        *string         `json:"runbook_url,omitempty"`
 	OccurrenceCount   int32           `json:"occurrence_count"`
 	FirstFiredAt      time.Time       `json:"first_fired_at"`
 	LastFiredAt       time.Time       `json:"last_fired_at"`
