@@ -24,19 +24,39 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "nightowl_token";
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    token: null,
+function getInitialState(): AuthState {
+  // In dev mode, start authenticated immediately (API client uses dev API key).
+  if (import.meta.env.DEV) {
+    return {
+      token: null,
+      user: { id: "dev", email: "dev@localhost", display_name: "Dev User", role: "admin" },
+      isAuthenticated: true,
+      isLoading: true, // still loading real user data
+    };
+  }
+
+  // In prod, check for a stored token synchronously to avoid flash.
+  const stored = localStorage.getItem(TOKEN_KEY);
+  return {
+    token: stored,
     user: null,
     isAuthenticated: false,
-    isLoading: true,
-  });
+    isLoading: !!stored, // only loading if we need to validate a token
+  };
+}
 
-  // In dev mode, skip token-based auth entirely — the API client uses the dev API key.
-  const isDevMode = import.meta.env.DEV;
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<AuthState>(getInitialState);
 
   useEffect(() => {
-    if (isDevMode) {
+    if (import.meta.env.DEV) {
       // Fetch real user data from the users API so the user menu
       // shows accurate info and user-scoped features work.
       fetch("/api/v1/users", {
@@ -45,34 +65,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           const admin = data?.users?.find((u: { role: string }) => u.role === "admin");
-          setState({
-            token: null,
-            user: admin
-              ? { id: admin.id, email: admin.email, display_name: admin.display_name, role: admin.role }
-              : { id: "dev", email: "dev@localhost", display_name: "Dev User", role: "admin" },
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          if (admin) {
+            setState({
+              token: null,
+              user: { id: admin.id, email: admin.email, display_name: admin.display_name, role: admin.role },
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } else {
+            setState((s) => ({ ...s, isLoading: false }));
+          }
         })
         .catch(() => {
-          setState({
-            token: null,
-            user: { id: "dev", email: "dev@localhost", display_name: "Dev User", role: "admin" },
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          setState((s) => ({ ...s, isLoading: false }));
         });
       return;
     }
 
-    // Try to restore session from localStorage.
+    // Prod: validate the stored token with the backend.
     const stored = localStorage.getItem(TOKEN_KEY);
-    if (!stored) {
-      setState((s) => ({ ...s, isLoading: false }));
-      return;
-    }
+    if (!stored) return; // isLoading is already false from getInitialState
 
-    // Validate the token with the backend.
     fetch("/auth/me", {
       headers: { Authorization: `Bearer ${stored}` },
     })
@@ -87,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(TOKEN_KEY);
         setState({ token: null, user: null, isAuthenticated: false, isLoading: false });
       });
-  }, [isDevMode]);
+  }, []);
 
   const login = useCallback((token: string, user: UserInfo) => {
     localStorage.setItem(TOKEN_KEY, token);
@@ -96,13 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    const currentToken = state.token;
     setState({ token: null, user: null, isAuthenticated: false, isLoading: false });
     // POST to logout endpoint (fire-and-forget).
-    const token = state.token;
-    if (token) {
+    if (currentToken) {
       fetch("/auth/logout", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${currentToken}` },
       }).catch(() => {});
     }
   }, [state.token]);
@@ -112,10 +125,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
 }

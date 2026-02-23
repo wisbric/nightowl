@@ -70,7 +70,7 @@ export function CoverageHeatmap() {
       dayMap.get(dayKey)!.push(slot);
     }
 
-    return Array.from(dayMap.entries()).map(([key, slots]) => ({
+    return Array.from(dayMap.values()).map((slots) => ({
       label: formatDate(slots[0].time, displayTz),
       slots,
     }));

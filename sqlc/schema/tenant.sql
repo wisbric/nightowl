@@ -8,6 +8,7 @@ CREATE TABLE users (
     slack_user_id   TEXT,
     role            TEXT NOT NULL DEFAULT 'engineer',
     is_active       BOOLEAN NOT NULL DEFAULT true,
+    password_hash   TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -116,13 +117,17 @@ CREATE TABLE rosters (
     name                    TEXT NOT NULL,
     description             TEXT,
     timezone                TEXT NOT NULL,
-    rotation_type           TEXT NOT NULL,
-    rotation_length         INTEGER NOT NULL DEFAULT 7,
     handoff_time            TIME NOT NULL DEFAULT '09:00',
+    handoff_day             INTEGER NOT NULL DEFAULT 1,
+    schedule_weeks_ahead    INTEGER NOT NULL DEFAULT 12,
+    max_consecutive_weeks   INTEGER NOT NULL DEFAULT 2,
     is_follow_the_sun       BOOLEAN DEFAULT false,
     linked_roster_id        UUID REFERENCES rosters(id),
     escalation_policy_id    UUID REFERENCES escalation_policies(id),
-    start_date              DATE NOT NULL,
+    active_hours_start      TIME,
+    active_hours_end        TIME,
+    end_date                DATE,
+    is_active               BOOLEAN NOT NULL DEFAULT true,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -131,9 +136,27 @@ CREATE TABLE roster_members (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roster_id   UUID NOT NULL REFERENCES rosters(id) ON DELETE CASCADE,
     user_id     UUID NOT NULL REFERENCES users(id),
-    position    INTEGER NOT NULL,
-    UNIQUE(roster_id, user_id),
-    UNIQUE(roster_id, position)
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    left_at     TIMESTAMPTZ,
+    UNIQUE(roster_id, user_id)
+);
+
+CREATE TABLE roster_schedule (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    roster_id         UUID NOT NULL REFERENCES rosters(id) ON DELETE CASCADE,
+    week_start        DATE NOT NULL,
+    week_end          DATE NOT NULL,
+    primary_user_id   UUID REFERENCES users(id),
+    secondary_user_id UUID REFERENCES users(id),
+    is_locked         BOOLEAN NOT NULL DEFAULT false,
+    generated         BOOLEAN NOT NULL DEFAULT true,
+    notes             TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(roster_id, week_start),
+    CHECK (primary_user_id IS DISTINCT FROM secondary_user_id),
+    CHECK (week_end > week_start)
 );
 
 CREATE TABLE roster_overrides (
@@ -173,12 +196,25 @@ CREATE TABLE audit_log (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE slack_message_mappings (
+CREATE TABLE message_mappings (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     alert_id    UUID REFERENCES alerts(id) ON DELETE CASCADE,
     incident_id UUID REFERENCES incidents(id) ON DELETE CASCADE,
+    provider    TEXT NOT NULL DEFAULT 'slack',
     channel_id  TEXT NOT NULL,
-    message_ts  TEXT NOT NULL,
-    thread_ts   TEXT,
+    message_id  TEXT NOT NULL,
+    thread_id   TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(alert_id, provider)
+);
+
+CREATE TABLE personal_access_tokens (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    token_hash  TEXT NOT NULL,
+    prefix      TEXT NOT NULL,
+    expires_at  TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

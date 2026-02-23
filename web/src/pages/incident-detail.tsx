@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
@@ -15,7 +15,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident, IncidentHistoryEntry, RunbooksResponse, Runbook } from "@/types/api";
+import type { Incident, IncidentHistoryEntry, RunbooksResponse } from "@/types/api";
 import { BookOpen } from "lucide-react";
 
 interface IncidentForm {

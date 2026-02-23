@@ -536,7 +536,7 @@ func (h *Handler) handleRosterCommand(w http.ResponseWriter, r *http.Request, cm
 		if filterName != "" && !strings.Contains(strings.ToLower(roster.Name), filterName) {
 			continue
 		}
-		lines = append(lines, "• *"+roster.Name+"* — "+roster.RotationType+" rotation ("+roster.Timezone+")")
+		lines = append(lines, "• *"+roster.Name+"* — weekly rotation ("+roster.Timezone+")")
 	}
 
 	if len(lines) == 0 {

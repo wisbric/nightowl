@@ -1,11 +1,11 @@
 -- name: ListRosterMembers :many
 SELECT * FROM roster_members
 WHERE roster_id = $1
-ORDER BY position;
+ORDER BY joined_at;
 
 -- name: CreateRosterMember :one
-INSERT INTO roster_members (roster_id, user_id, position)
-VALUES ($1, $2, $3)
+INSERT INTO roster_members (roster_id, user_id)
+VALUES ($1, $2)
 RETURNING *;
 
 -- name: DeleteRosterMember :exec

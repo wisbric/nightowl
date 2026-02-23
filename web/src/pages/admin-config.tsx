@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
@@ -38,7 +38,7 @@ export function AdminConfigPage() {
   useTitle("Configuration");
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState<ConfigForm>(emptyForm);
+  const [formOverride, setFormOverride] = useState<ConfigForm | null>(null);
   const [saved, setSaved] = useState(false);
   const [testResult, setTestResult] = useState<TestMessagingResponse | null>(null);
 
@@ -47,20 +47,24 @@ export function AdminConfigPage() {
     queryFn: () => api.get<TenantConfigResponse>("/admin/config"),
   });
 
-  useEffect(() => {
-    if (data) {
-      setForm({
-        messaging_provider: data.messaging_provider || "none",
-        slack_workspace_url: data.slack_workspace_url || "",
-        slack_channel: data.slack_channel || "",
-        mattermost_url: data.mattermost_url || "",
-        mattermost_default_channel_id: data.mattermost_default_channel_id || "",
-        twilio_sid: data.twilio_sid || "",
-        twilio_phone_number: data.twilio_phone_number || "",
-        default_timezone: data.default_timezone || "UTC",
-      });
-    }
-  }, [data]);
+  const form = useMemo<ConfigForm>(() => {
+    if (formOverride) return formOverride;
+    if (!data) return emptyForm;
+    return {
+      messaging_provider: data.messaging_provider || "none",
+      slack_workspace_url: data.slack_workspace_url || "",
+      slack_channel: data.slack_channel || "",
+      mattermost_url: data.mattermost_url || "",
+      mattermost_default_channel_id: data.mattermost_default_channel_id || "",
+      twilio_sid: data.twilio_sid || "",
+      twilio_phone_number: data.twilio_phone_number || "",
+      default_timezone: data.default_timezone || "UTC",
+    };
+  }, [data, formOverride]);
+
+  const setForm = (update: ConfigForm | ((prev: ConfigForm) => ConfigForm)) => {
+    setFormOverride(typeof update === "function" ? update(form) : update);
+  };
 
   const mutation = useMutation({
     mutationFn: (data: ConfigForm) =>
