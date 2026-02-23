@@ -32,7 +32,7 @@ interface IncidentForm {
 }
 
 export function IncidentDetailPage() {
-  const { incidentId } = useParams({ from: "/incidents/$incidentId" });
+  const { incidentId } = useParams({ strict: false }) as { incidentId: string };
   const isNew = incidentId === "new";
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(isNew);

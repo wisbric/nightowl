@@ -14,7 +14,7 @@ import { formatRelativeTime } from "@/lib/utils";
 import type { Alert } from "@/types/api";
 
 export function AlertDetailPage() {
-  const { alertId } = useParams({ from: "/alerts/$alertId" });
+  const { alertId } = useParams({ strict: false }) as { alertId: string };
   const queryClient = useQueryClient();
 
   const { data: alert, isLoading } = useQuery({

@@ -73,7 +73,7 @@ function defaultForm(): PolicyForm {
 }
 
 export function EscalationDetailPage() {
-  const { policyId } = useParams({ from: "/escalation/$policyId" });
+  const { policyId } = useParams({ strict: false }) as { policyId: string };
   const isNew = policyId === "new";
   const queryClient = useQueryClient();
 

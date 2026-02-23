@@ -13,7 +13,7 @@ import { formatRelativeTime } from "@/lib/utils";
 import type { Runbook } from "@/types/api";
 
 export function RunbookDetailPage() {
-  const { runbookId } = useParams({ from: "/runbooks/$runbookId" });
+  const { runbookId } = useParams({ strict: false }) as { runbookId: string };
   const isNew = runbookId === "new";
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(isNew);

@@ -86,7 +86,7 @@ function isPastWeek(weekEnd: string): boolean {
 }
 
 export function RosterDetailPage() {
-  const { rosterId } = useParams({ from: "/rosters/$rosterId" });
+  const { rosterId } = useParams({ strict: false }) as { rosterId: string };
   const isNew = rosterId === "new";
   const queryClient = useQueryClient();
 
