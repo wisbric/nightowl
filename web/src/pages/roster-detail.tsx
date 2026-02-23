@@ -49,7 +49,6 @@ interface EditWeekForm {
   primary_user_id: string;
   secondary_user_id: string;
   notes: string;
-  is_locked: boolean;
 }
 
 function formatWeekDate(dateStr: string): string {
@@ -260,7 +259,7 @@ export function RosterDetailPage() {
                 <div>
                   <label className="text-sm font-medium">Handoff Day</label>
                   <Select value={rosterForm.handoff_day} onChange={(e) => setRosterForm({ ...rosterForm, handoff_day: e.target.value })}>
-                    {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                    {DAYS.map((d, i) => <option key={i} value={String(i)}>{d}</option>)}
                   </Select>
                 </div>
                 <div>
@@ -441,7 +440,6 @@ export function RosterDetailPage() {
                                 primary_user_id: entry.primary_user_id ?? "",
                                 secondary_user_id: entry.secondary_user_id ?? "",
                                 notes: entry.notes ?? "",
-                                is_locked: true,
                               })}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -652,15 +650,9 @@ export function RosterDetailPage() {
               onChange={(e) => editWeek && setEditWeek({ ...editWeek, notes: e.target.value })}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={editWeek?.is_locked ?? true}
-              onChange={(e) => editWeek && setEditWeek({ ...editWeek, is_locked: e.target.checked })}
-              className="rounded border-input"
-            />
-            Lock this week (prevents auto-regeneration)
-          </label>
+          <p className="text-xs text-muted-foreground">
+            Saving will lock this week to prevent auto-regeneration.
+          </p>
         </DialogContent>
         <DialogFooter>
           <Button variant="outline" onClick={() => setEditWeek(null)}>Cancel</Button>

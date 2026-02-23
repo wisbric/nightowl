@@ -58,7 +58,7 @@ function RosterListRow({ roster, usersById }: { roster: Roster; usersById: Recor
         {roster.is_active ? (
           <Badge variant="default" className="bg-green-600/20 text-green-400 border-green-600/30">Active</Badge>
         ) : (
-          <Badge variant="secondary">Ended {roster.end_date}</Badge>
+          <Badge variant="secondary">Ended {roster.end_date || "\u2014"}</Badge>
         )}
       </TableCell>
       <TableCell>
