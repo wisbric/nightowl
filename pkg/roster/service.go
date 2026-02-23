@@ -69,11 +69,11 @@ func (s *Service) AddMember(ctx context.Context, rosterID uuid.UUID, req AddMemb
 		return MemberResponse{}, err
 	}
 	// Regenerate unlocked future schedule to include the new member.
-	go func() {
-		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
-			s.logger.Error("regenerating schedule after add member", "error", err, "roster_id", rosterID)
-		}
-	}()
+	// Runs synchronously — the store uses the per-request DB connection
+	// which is released after the handler returns.
+	if err := s.regenerateFuture(ctx, rosterID); err != nil {
+		s.logger.Error("regenerating schedule after add member", "error", err, "roster_id", rosterID)
+	}
 	return member, nil
 }
 
@@ -81,12 +81,9 @@ func (s *Service) DeactivateMember(ctx context.Context, rosterID, userID uuid.UU
 	if err := s.store.DeactivateMember(ctx, rosterID, userID); err != nil {
 		return err
 	}
-	// Regenerate unlocked future schedule without the deactivated member.
-	go func() {
-		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
-			s.logger.Error("regenerating schedule after deactivate member", "error", err, "roster_id", rosterID)
-		}
-	}()
+	if err := s.regenerateFuture(ctx, rosterID); err != nil {
+		s.logger.Error("regenerating schedule after deactivate member", "error", err, "roster_id", rosterID)
+	}
 	return nil
 }
 
@@ -94,11 +91,9 @@ func (s *Service) SetMemberActive(ctx context.Context, rosterID, userID uuid.UUI
 	if err := s.store.SetMemberActive(ctx, rosterID, userID, active); err != nil {
 		return err
 	}
-	go func() {
-		if err := s.regenerateFuture(context.Background(), rosterID); err != nil {
-			s.logger.Error("regenerating schedule after toggle member", "error", err, "roster_id", rosterID)
-		}
-	}()
+	if err := s.regenerateFuture(ctx, rosterID); err != nil {
+		s.logger.Error("regenerating schedule after toggle member", "error", err, "roster_id", rosterID)
+	}
 	return nil
 }
 
