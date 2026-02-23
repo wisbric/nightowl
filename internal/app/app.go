@@ -12,6 +12,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
+	"golang.org/x/oauth2"
+
 	"github.com/wisbric/nightowl/internal/audit"
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/config"
@@ -27,6 +29,7 @@ import (
 	"github.com/wisbric/nightowl/pkg/integration"
 	nightowlmm "github.com/wisbric/nightowl/pkg/mattermost"
 	"github.com/wisbric/nightowl/pkg/messaging"
+	"github.com/wisbric/nightowl/pkg/pat"
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
@@ -100,6 +103,21 @@ func Run(ctx context.Context, cfg *config.Config) error {
 }
 
 func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry) error {
+	// Session manager.
+	sessionSecret := cfg.SessionSecret
+	if sessionSecret == "" {
+		sessionSecret = auth.GenerateDevSecret()
+		logger.Info("session: using auto-generated dev secret (set NIGHTOWL_SESSION_SECRET in production)")
+	}
+	sessionMaxAge, err := time.ParseDuration(cfg.SessionMaxAge)
+	if err != nil {
+		return fmt.Errorf("parsing session max age %q: %w", cfg.SessionMaxAge, err)
+	}
+	sessionMgr, err := auth.NewSessionManager(sessionSecret, sessionMaxAge)
+	if err != nil {
+		return fmt.Errorf("creating session manager: %w", err)
+	}
+
 	// OIDC authenticator (optional — nil if not configured).
 	var oidcAuth *auth.OIDCAuthenticator
 	if cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "" {
@@ -113,12 +131,43 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		logger.Info("OIDC authentication disabled (OIDC_ISSUER_URL not set)")
 	}
 
+	// PAT authenticator.
+	patAuth := auth.NewPATAuthenticator(db)
+
 	// Audit log writer (async, buffered).
 	auditWriter := audit.NewWriter(db, logger)
 	auditWriter.Start(ctx)
 	defer auditWriter.Close()
 
-	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, oidcAuth)
+	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, sessionMgr, oidcAuth, patAuth)
+
+	// --- Auth routes (public, pre-authentication) ---
+	loginHandler := auth.NewLoginHandler(sessionMgr, db, logger, oidcAuth != nil)
+	srv.Router.Post("/auth/login", loginHandler.HandleLogin)
+	srv.Router.Get("/auth/config", loginHandler.HandleAuthConfig)
+	srv.Router.Get("/auth/me", loginHandler.HandleMe)
+	srv.Router.Post("/auth/logout", loginHandler.HandleLogout)
+
+	// OIDC Authorization Code flow (only if OIDC is configured).
+	if oidcAuth != nil && cfg.OIDCClientSecret != "" {
+		oauth2Cfg := &oauth2.Config{
+			ClientID:     cfg.OIDCClientID,
+			ClientSecret: cfg.OIDCClientSecret,
+			RedirectURL:  cfg.OIDCRedirectURL,
+			Scopes:       []string{"openid", "email", "profile"},
+		}
+		// The Endpoint is discovered from the OIDC provider, but oauth2
+		// needs it explicitly. We reuse the issuer URL.
+		oauth2Cfg.Endpoint = oauth2.Endpoint{
+			AuthURL:  cfg.OIDCIssuerURL + "/authorize",
+			TokenURL: cfg.OIDCIssuerURL + "/oauth/token",
+		}
+
+		oidcFlow := auth.NewOIDCFlowHandler(oauth2Cfg, oidcAuth, sessionMgr, db, rdb, logger)
+		srv.Router.Get("/auth/oidc/login", oidcFlow.HandleLogin)
+		srv.Router.Get("/auth/oidc/callback", oidcFlow.HandleCallback)
+		logger.Info("OIDC Authorization Code flow enabled", "redirect_url", cfg.OIDCRedirectURL)
+	}
 
 	// System status endpoint.
 	srv.APIRouter.Get("/status", srv.HandleStatus)
@@ -158,6 +207,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	apikeyHandler := apikey.NewHandler(logger, auditWriter, db)
 	srv.APIRouter.Mount("/api-keys", apikeyHandler.Routes())
+
+	patHandler := pat.NewHandler(logger)
+	srv.APIRouter.Mount("/user/tokens", patHandler.Routes())
 
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())

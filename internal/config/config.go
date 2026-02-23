@@ -37,8 +37,14 @@ type Config struct {
 	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envDefault:"*" envSeparator:","`
 
 	// OIDC (optional — if not set, JWT authentication is disabled)
-	OIDCIssuerURL string `env:"OIDC_ISSUER_URL"`
-	OIDCClientID  string `env:"OIDC_CLIENT_ID"`
+	OIDCIssuerURL    string `env:"OIDC_ISSUER_URL"`
+	OIDCClientID     string `env:"OIDC_CLIENT_ID"`
+	OIDCClientSecret string `env:"OIDC_CLIENT_SECRET"`
+	OIDCRedirectURL  string `env:"OIDC_REDIRECT_URL" envDefault:"http://localhost:5173/auth/callback"`
+
+	// Session
+	SessionSecret string `env:"NIGHTOWL_SESSION_SECRET"`
+	SessionMaxAge string `env:"NIGHTOWL_SESSION_MAX_AGE" envDefault:"24h"`
 
 	// Slack (optional — if not set, Slack integration is disabled)
 	SlackBotToken      string `env:"SLACK_BOT_TOKEN"`

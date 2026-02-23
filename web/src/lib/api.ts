@@ -1,23 +1,38 @@
 const API_BASE = "/api/v1";
 const DEV_API_KEY = "ow_dev_seed_key_do_not_use_in_production";
+const TOKEN_KEY = "nightowl_token";
 
-function getApiKey(): string | null {
-  return localStorage.getItem("nightowl_api_key")
-    || (import.meta.env.DEV ? DEV_API_KEY : null);
+function getAuthHeaders(): Record<string, string> {
+  // In dev mode, use the API key.
+  if (import.meta.env.DEV) {
+    const apiKey = localStorage.getItem("nightowl_api_key") || DEV_API_KEY;
+    return { "X-API-Key": apiKey };
+  }
+
+  // In production, use the session token.
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  return {};
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...getAuthHeaders(),
     ...(options?.headers as Record<string, string>),
   };
 
-  const apiKey = getApiKey();
-  if (apiKey) {
-    headers["X-API-Key"] = apiKey;
-  }
-
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  // Handle 401: clear token and redirect to login (production only).
+  if (res.status === 401 && !import.meta.env.DEV) {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));

@@ -35,8 +35,9 @@ type Server struct {
 
 // NewServer creates an HTTP server with middleware and health/metrics endpoints.
 // oidcAuth may be nil when OIDC is not configured (JWT auth will be unavailable).
+// sessionMgr may be nil when sessions are not configured.
 // Domain handlers should be mounted on APIRouter after calling NewServer.
-func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, oidcAuth *auth.OIDCAuthenticator) *Server {
+func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *redis.Client, metricsReg *prometheus.Registry, sessionMgr *auth.SessionManager, oidcAuth *auth.OIDCAuthenticator, patAuth *auth.PATAuthenticator) *Server {
 	s := &Server{
 		Router:    chi.NewRouter(),
 		Logger:    logger,
@@ -73,8 +74,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger, db *pgxpool.Pool, rdb *r
 
 	// Authenticated, tenant-scoped API routes.
 	s.Router.Route("/api/v1", func(r chi.Router) {
-		// 1. Authenticate: JWT → API key → dev header fallback.
-		r.Use(auth.Middleware(oidcAuth, db, logger))
+		// 1. Authenticate: session JWT → OIDC JWT → API key → dev header fallback.
+		r.Use(auth.Middleware(sessionMgr, oidcAuth, patAuth, db, logger))
 
 		// 2. Resolve tenant and set search_path from the authenticated identity.
 		r.Use(tenant.Middleware(db, &authContextResolver{}, logger))

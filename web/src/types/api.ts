@@ -370,6 +370,34 @@ export interface ApiKeyCreateResponse extends ApiKeyDetail {
   raw_key: string;
 }
 
+// --- Personal Access Tokens ---
+
+export interface PersonalAccessToken {
+  id: string;
+  user_id: string;
+  name: string;
+  prefix: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface PATCreateResponse {
+  id: string;
+  user_id: string;
+  name: string;
+  prefix: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+  raw_token: string;
+}
+
+export interface PATListResponse {
+  tokens: PersonalAccessToken[];
+  count: number;
+}
+
 // --- Admin ---
 
 export interface TenantConfigResponse {

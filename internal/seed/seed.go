@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/db"
 	"github.com/wisbric/nightowl/pkg/runbook"
@@ -70,6 +72,16 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 		return fmt.Errorf("creating user alice: %w", err)
 	}
 	logger.Info("seed: created user", "user", user1.DisplayName, "id", user1.ID)
+
+	// Set password for admin user (bcrypt hash of "admin").
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hashing admin password: %w", err)
+	}
+	if _, err := conn.Exec(ctx, "UPDATE users SET password_hash = $1 WHERE id = $2", string(adminHash), user1.ID); err != nil {
+		return fmt.Errorf("setting admin password: %w", err)
+	}
+	logger.Info("seed: set password for admin user", "email", user1.Email)
 
 	phone2 := "+14155551234"
 	user2, err := tq.CreateUser(ctx, db.CreateUserParams{
