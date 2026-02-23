@@ -1,14 +1,5 @@
 package slack
 
-import (
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
-)
-
-func uuidToPgtype(id uuid.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: id, Valid: true}
-}
-
 // AlertInfo holds the data needed to build a Slack alert notification.
 type AlertInfo struct {
 	AlertID           string

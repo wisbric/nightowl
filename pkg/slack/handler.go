@@ -201,10 +201,14 @@ func (h *Handler) handleAckAction(r *http.Request, ic goslack.InteractionCallbac
 		return
 	}
 
-	// Post thread reply.
-	mapping, err := q.GetSlackMappingByAlert(r.Context(), uuidToPgtype(alertID))
-	if err == nil && mapping.MessageTs != "" {
-		_ = h.notifier.PostThreadReply(r.Context(), mapping.ChannelID, mapping.MessageTs,
+	// Post thread reply using the message_mappings table.
+	var channelID2, messageID string
+	_ = conn.QueryRow(r.Context(),
+		"SELECT channel_id, message_id FROM message_mappings WHERE alert_id = $1 AND provider = 'slack' LIMIT 1",
+		alertID,
+	).Scan(&channelID2, &messageID)
+	if messageID != "" {
+		_ = h.notifier.PostThreadReply(r.Context(), channelID2, messageID,
 			"✅ Acknowledged by <@"+ic.User.ID+">")
 	}
 

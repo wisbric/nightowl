@@ -38,13 +38,21 @@ func (s *Service) Get(ctx context.Context, tenantID uuid.UUID) (*ConfigResponse,
 		}
 	}
 
+	provider := cfg.MessagingProvider
+	if provider == "" {
+		provider = "none"
+	}
+
 	return &ConfigResponse{
-		SlackWorkspaceURL: cfg.SlackWorkspaceURL,
-		SlackChannel:      cfg.SlackChannel,
-		TwilioSID:         cfg.TwilioSID,
-		TwilioPhoneNumber: cfg.TwilioPhoneNumber,
-		DefaultTimezone:   cfg.DefaultTimezone,
-		UpdatedAt:         t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		MessagingProvider:          provider,
+		SlackWorkspaceURL:          cfg.SlackWorkspaceURL,
+		SlackChannel:               cfg.SlackChannel,
+		MattermostURL:              cfg.MattermostURL,
+		MattermostDefaultChannelID: cfg.MattermostDefaultChannelID,
+		TwilioSID:                  cfg.TwilioSID,
+		TwilioPhoneNumber:          cfg.TwilioPhoneNumber,
+		DefaultTimezone:            cfg.DefaultTimezone,
+		UpdatedAt:                  t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
 
@@ -58,12 +66,20 @@ func (s *Service) Update(ctx context.Context, tenantID uuid.UUID, req UpdateRequ
 		return nil, fmt.Errorf("fetching tenant: %w", err)
 	}
 
+	provider := req.MessagingProvider
+	if provider == "" {
+		provider = "none"
+	}
+
 	cfg := TenantConfig{
-		SlackWorkspaceURL: req.SlackWorkspaceURL,
-		SlackChannel:      req.SlackChannel,
-		TwilioSID:         req.TwilioSID,
-		TwilioPhoneNumber: req.TwilioPhoneNumber,
-		DefaultTimezone:   req.DefaultTimezone,
+		MessagingProvider:          provider,
+		SlackWorkspaceURL:          req.SlackWorkspaceURL,
+		SlackChannel:               req.SlackChannel,
+		MattermostURL:              req.MattermostURL,
+		MattermostDefaultChannelID: req.MattermostDefaultChannelID,
+		TwilioSID:                  req.TwilioSID,
+		TwilioPhoneNumber:          req.TwilioPhoneNumber,
+		DefaultTimezone:            req.DefaultTimezone,
 	}
 
 	configBytes, err := json.Marshal(cfg)
@@ -81,11 +97,14 @@ func (s *Service) Update(ctx context.Context, tenantID uuid.UUID, req UpdateRequ
 	}
 
 	return &ConfigResponse{
-		SlackWorkspaceURL: cfg.SlackWorkspaceURL,
-		SlackChannel:      cfg.SlackChannel,
-		TwilioSID:         cfg.TwilioSID,
-		TwilioPhoneNumber: cfg.TwilioPhoneNumber,
-		DefaultTimezone:   cfg.DefaultTimezone,
-		UpdatedAt:         updated.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		MessagingProvider:          provider,
+		SlackWorkspaceURL:          cfg.SlackWorkspaceURL,
+		SlackChannel:               cfg.SlackChannel,
+		MattermostURL:              cfg.MattermostURL,
+		MattermostDefaultChannelID: cfg.MattermostDefaultChannelID,
+		TwilioSID:                  cfg.TwilioSID,
+		TwilioPhoneNumber:          cfg.TwilioPhoneNumber,
+		DefaultTimezone:            cfg.DefaultTimezone,
+		UpdatedAt:                  updated.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }

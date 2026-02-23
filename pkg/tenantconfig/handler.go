@@ -1,16 +1,19 @@
 package tenantconfig
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	goslack "github.com/slack-go/slack"
 
 	"github.com/wisbric/nightowl/internal/audit"
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/httpserver"
+	nightowlmm "github.com/wisbric/nightowl/pkg/mattermost"
 )
 
 // Handler provides HTTP handlers for the tenant configuration API.
@@ -36,6 +39,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Use(auth.RequireRole(auth.RoleAdmin))
 	r.Get("/", h.handleGet)
 	r.Put("/", h.handleUpdate)
+	r.Post("/messaging/test", h.handleTestMessaging)
 	return r
 }
 
@@ -81,4 +85,81 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpserver.Respond(w, http.StatusOK, resp)
+}
+
+// TestMessagingRequest is the JSON body for POST /admin/config/messaging/test.
+type TestMessagingRequest struct {
+	Provider string `json:"provider" validate:"required"`
+	// Slack fields
+	BotToken string `json:"bot_token"`
+	// Mattermost fields
+	URL string `json:"url"`
+}
+
+// TestMessagingResponse is the JSON response for the test connection endpoint.
+type TestMessagingResponse struct {
+	OK        bool   `json:"ok"`
+	Error     string `json:"error,omitempty"`
+	BotName   string `json:"bot_name,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+}
+
+func (h *Handler) handleTestMessaging(w http.ResponseWriter, r *http.Request) {
+	var req TestMessagingRequest
+	if !httpserver.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ctx := r.Context()
+
+	switch req.Provider {
+	case "slack":
+		h.testSlack(ctx, w, req)
+	case "mattermost":
+		h.testMattermost(ctx, w, req)
+	default:
+		httpserver.Respond(w, http.StatusOK, TestMessagingResponse{
+			OK:    false,
+			Error: "unknown provider: " + req.Provider,
+		})
+	}
+}
+
+func (h *Handler) testSlack(ctx context.Context, w http.ResponseWriter, req TestMessagingRequest) {
+	if req.BotToken == "" {
+		httpserver.Respond(w, http.StatusOK, TestMessagingResponse{OK: false, Error: "bot_token is required"})
+		return
+	}
+
+	client := goslack.New(req.BotToken)
+	resp, err := client.AuthTestContext(ctx)
+	if err != nil {
+		httpserver.Respond(w, http.StatusOK, TestMessagingResponse{OK: false, Error: err.Error()})
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, TestMessagingResponse{
+		OK:        true,
+		BotName:   resp.User,
+		Workspace: resp.Team,
+	})
+}
+
+func (h *Handler) testMattermost(ctx context.Context, w http.ResponseWriter, req TestMessagingRequest) {
+	if req.URL == "" || req.BotToken == "" {
+		httpserver.Respond(w, http.StatusOK, TestMessagingResponse{OK: false, Error: "url and bot_token are required"})
+		return
+	}
+
+	client := nightowlmm.NewClient(req.URL, req.BotToken, h.logger)
+	me, err := client.GetMe(ctx)
+	if err != nil {
+		httpserver.Respond(w, http.StatusOK, TestMessagingResponse{OK: false, Error: err.Error()})
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, TestMessagingResponse{
+		OK:      true,
+		BotName: me.Username,
+	})
 }

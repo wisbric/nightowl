@@ -25,6 +25,8 @@ import (
 	"github.com/wisbric/nightowl/pkg/escalation"
 	"github.com/wisbric/nightowl/pkg/incident"
 	"github.com/wisbric/nightowl/pkg/integration"
+	nightowlmm "github.com/wisbric/nightowl/pkg/mattermost"
+	"github.com/wisbric/nightowl/pkg/messaging"
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/runbook"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
@@ -163,16 +165,37 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	tenantConfigHandler := tenantconfig.NewHandler(logger, auditWriter, db)
 	srv.APIRouter.Mount("/admin/config", tenantConfigHandler.Routes())
 
-	// Slack routes (outside auth middleware — verified by Slack signing secret).
+	// --- Messaging provider registry ---
+	msgRegistry := messaging.NewRegistry()
+
+	// Slack provider + routes.
 	slackNotifier := nightowlslack.NewNotifier(cfg.SlackBotToken, cfg.SlackAlertChannel, logger)
+	slackProvider := nightowlslack.NewProvider(slackNotifier, logger)
 	slackHandler := nightowlslack.NewHandler(slackNotifier, db, logger, cfg.SlackSigningSecret, "devco")
 	srv.Router.Mount("/api/v1/slack", slackHandler.Routes())
 
 	if slackNotifier.IsEnabled() {
+		msgRegistry.Register(slackProvider)
 		logger.Info("slack integration enabled", "channel", cfg.SlackAlertChannel)
 	} else {
 		logger.Info("slack integration disabled (SLACK_BOT_TOKEN not set)")
 	}
+
+	// Mattermost provider + routes.
+	if cfg.MattermostURL != "" && cfg.MattermostBotToken != "" {
+		mmClient := nightowlmm.NewClient(cfg.MattermostURL, cfg.MattermostBotToken, logger)
+		actionURL := fmt.Sprintf("http://%s/api/v1/mattermost/actions", cfg.ListenAddr())
+		mmProvider := nightowlmm.NewProvider(mmClient, cfg.MattermostDefaultChannelID, actionURL, logger)
+		mmHandler := nightowlmm.NewHandler(mmProvider, db, logger, cfg.MattermostWebhookSecret, "devco")
+		srv.Router.Mount("/api/v1/mattermost", mmHandler.Routes())
+		msgRegistry.Register(mmProvider)
+		logger.Info("mattermost integration enabled", "url", cfg.MattermostURL)
+	} else {
+		logger.Info("mattermost integration disabled (MATTERMOST_URL not set)")
+	}
+
+	// Store registry for use by test connection endpoint.
+	_ = msgRegistry
 
 	httpSrv := &http.Server{
 		Addr:         cfg.ListenAddr(),

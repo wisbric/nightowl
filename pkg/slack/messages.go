@@ -5,22 +5,13 @@ import (
 	"fmt"
 
 	goslack "github.com/slack-go/slack"
+
+	"github.com/wisbric/nightowl/pkg/messaging"
 )
 
 // SeverityEmoji returns the emoji prefix for a given severity level.
 func SeverityEmoji(severity string) string {
-	switch severity {
-	case "critical":
-		return "🔴"
-	case "major":
-		return "🟠"
-	case "warning":
-		return "🟡"
-	case "info":
-		return "🔵"
-	default:
-		return "⚪"
-	}
+	return messaging.SeverityEmoji(severity)
 }
 
 // AlertNotificationBlocks builds Slack Block Kit blocks for an alert notification.
@@ -262,23 +253,9 @@ func CreateIncidentModal(alertID, alertTitle, alertDescription, alertSeverity st
 
 // severity returns a human-readable severity label.
 func severity(s string) string {
-	switch s {
-	case "critical":
-		return "CRITICAL"
-	case "major":
-		return "MAJOR"
-	case "warning":
-		return "WARNING"
-	case "info":
-		return "INFO"
-	default:
-		return s
-	}
+	return messaging.SeverityLabel(s)
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-3] + "..."
+	return messaging.Truncate(s, max)
 }

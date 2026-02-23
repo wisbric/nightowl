@@ -41,9 +41,15 @@ type Config struct {
 	OIDCClientID  string `env:"OIDC_CLIENT_ID"`
 
 	// Slack (optional — if not set, Slack integration is disabled)
-	SlackBotToken     string `env:"SLACK_BOT_TOKEN"`
+	SlackBotToken      string `env:"SLACK_BOT_TOKEN"`
 	SlackSigningSecret string `env:"SLACK_SIGNING_SECRET"`
-	SlackAlertChannel string `env:"SLACK_ALERT_CHANNEL"` // e.g. "#alerts" or channel ID
+	SlackAlertChannel  string `env:"SLACK_ALERT_CHANNEL"` // e.g. "#alerts" or channel ID
+
+	// Mattermost (optional — if not set, Mattermost integration is disabled)
+	MattermostURL              string `env:"MATTERMOST_URL"`
+	MattermostBotToken         string `env:"MATTERMOST_BOT_TOKEN"`
+	MattermostWebhookSecret    string `env:"MATTERMOST_WEBHOOK_SECRET"`
+	MattermostDefaultChannelID string `env:"MATTERMOST_DEFAULT_CHANNEL_ID"`
 }
 
 // Load reads configuration from environment variables.

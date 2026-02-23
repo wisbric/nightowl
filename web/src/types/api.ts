@@ -373,12 +373,22 @@ export interface ApiKeyCreateResponse extends ApiKeyDetail {
 // --- Admin ---
 
 export interface TenantConfigResponse {
+  messaging_provider: string;
   slack_workspace_url: string;
   slack_channel: string;
+  mattermost_url: string;
+  mattermost_default_channel_id: string;
   twilio_sid: string;
   twilio_phone_number: string;
   default_timezone: string;
   updated_at: string;
+}
+
+export interface TestMessagingResponse {
+  ok: boolean;
+  error?: string;
+  bot_name?: string;
+  workspace?: string;
 }
 
 export interface StatusResponse {
