@@ -146,6 +146,8 @@ func (s *Store) Update(ctx context.Context, id uuid.UUID, p UpdateUserParams) (U
 }
 
 // Deactivate soft-deletes a user by setting is_active to false.
+// Also deactivates the user from all roster memberships and removes
+// them from future unlocked schedule weeks.
 func (s *Store) Deactivate(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE users SET is_active = false, updated_at = now() WHERE id = $1`
 	tag, err := s.dbtx.Exec(ctx, query, id)
@@ -155,5 +157,25 @@ func (s *Store) Deactivate(ctx context.Context, id uuid.UUID) error {
 	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
+
+	// Deactivate from all roster memberships.
+	if _, err := s.dbtx.Exec(ctx,
+		`UPDATE roster_members SET is_active = false, left_at = now() WHERE user_id = $1 AND is_active = true`,
+		id); err != nil {
+		return fmt.Errorf("deactivating roster memberships: %w", err)
+	}
+
+	// Remove from current and future unlocked schedule weeks (preserve locked/past weeks for history).
+	if _, err := s.dbtx.Exec(ctx,
+		`UPDATE roster_schedule SET primary_user_id = NULL WHERE primary_user_id = $1 AND is_locked = false AND week_start >= CURRENT_DATE`,
+		id); err != nil {
+		return fmt.Errorf("clearing primary schedule assignments: %w", err)
+	}
+	if _, err := s.dbtx.Exec(ctx,
+		`UPDATE roster_schedule SET secondary_user_id = NULL WHERE secondary_user_id = $1 AND is_locked = false AND week_start >= CURRENT_DATE`,
+		id); err != nil {
+		return fmt.Errorf("clearing secondary schedule assignments: %w", err)
+	}
+
 	return nil
 }
