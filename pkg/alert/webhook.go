@@ -21,10 +21,10 @@ import (
 // --- Alertmanager payload types ---
 
 type alertmanagerPayload struct {
-	Version  string                `json:"version"`
-	GroupKey string                `json:"groupKey"`
-	Status   string                `json:"status"`
-	Alerts   []alertmanagerAlert   `json:"alerts"`
+	Version  string              `json:"version"`
+	GroupKey string              `json:"groupKey"`
+	Status   string              `json:"status"`
+	Alerts   []alertmanagerAlert `json:"alerts"`
 }
 
 type alertmanagerAlert struct {
@@ -71,10 +71,10 @@ type agentMetadata struct {
 
 // WebhookMetrics holds the Prometheus metrics for webhook alert processing.
 type WebhookMetrics struct {
-	ReceivedTotal        *prometheus.CounterVec
-	ProcessingDuration   *prometheus.HistogramVec
-	KBHitsTotal          prometheus.Counter
-	AgentResolvedTotal   prometheus.Counter
+	ReceivedTotal      *prometheus.CounterVec
+	ProcessingDuration *prometheus.HistogramVec
+	KBHitsTotal        prometheus.Counter
+	AgentResolvedTotal prometheus.Counter
 }
 
 // WebhookHandler provides HTTP handlers for alert webhook endpoints.
@@ -372,17 +372,17 @@ func (h *WebhookHandler) createAgentKBEntry(ctx context.Context, dbtx db.DBTX, n
 	q := db.New(dbtx)
 	category := "agent-resolved"
 	_, err := q.CreateIncident(ctx, db.CreateIncidentParams{
-		Title:        normalized.Title,
-		Fingerprints: []string{normalized.Fingerprint},
-		Severity:     normalized.Severity,
-		Category:     &category,
-		Tags:         []string{"auto-resolved", "agent"},
-		Services:     []string{},
-		Clusters:     []string{},
-		Namespaces:   []string{},
-		Symptoms:     normalized.Description,
+		Title:         normalized.Title,
+		Fingerprints:  []string{normalized.Fingerprint},
+		Severity:      normalized.Severity,
+		Category:      &category,
+		Tags:          []string{"auto-resolved", "agent"},
+		Services:      []string{},
+		Clusters:      []string{},
+		Namespaces:    []string{},
+		Symptoms:      normalized.Description,
 		ErrorPatterns: []string{},
-		Solution:     &normalized.AgentResolutionNotes,
+		Solution:      &normalized.AgentResolutionNotes,
 	})
 	if err != nil {
 		h.logger.Error("creating agent KB entry", "error", err, "title", normalized.Title)

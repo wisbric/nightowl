@@ -52,11 +52,11 @@ func TestShouldEscalate_ElapsedTime(t *testing.T) {
 	tiers := parseTiers(json.RawMessage(tiersJSON))
 
 	tests := []struct {
-		name          string
-		currentTier   int32
-		alertAge      time.Duration
-		wantEscalate  bool
-		wantNextTier  int
+		name         string
+		currentTier  int32
+		alertAge     time.Duration
+		wantEscalate bool
+		wantNextTier int
 	}{
 		{
 			name:         "new alert, not yet time for tier 1",

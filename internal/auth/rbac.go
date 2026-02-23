@@ -10,7 +10,7 @@ var roleLevel = map[string]int{
 	RoleAdmin:    40,
 	RoleManager:  30,
 	RoleEngineer: 20,
-	RoleReadonly:  10,
+	RoleReadonly: 10,
 }
 
 // RequireAuth rejects requests that have no authenticated identity.

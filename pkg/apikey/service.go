@@ -76,7 +76,9 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 // and a short prefix for display.
 func generateAPIKey() (raw, hash, prefix string) {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
+	}
 	raw = fmt.Sprintf("ow_%x", b)
 	h := sha256.Sum256([]byte(raw))
 	hash = hex.EncodeToString(h[:])

@@ -11,19 +11,19 @@ import (
 
 // CreateRosterRequest is the JSON body for POST /api/v1/rosters.
 type CreateRosterRequest struct {
-	Name               string     `json:"name" validate:"required,min=2"`
-	Description        *string    `json:"description"`
-	Timezone           string     `json:"timezone" validate:"required"`
-	HandoffTime        string     `json:"handoff_time" validate:"required"` // HH:MM
-	HandoffDay         int        `json:"handoff_day"`                      // 0=Sun..6=Sat, default 1=Mon
-	ScheduleWeeksAhead int        `json:"schedule_weeks_ahead"`             // default 12
-	MaxConsecutiveWeeks int       `json:"max_consecutive_weeks"`            // default 2
-	IsFollowTheSun     bool       `json:"is_follow_the_sun"`
-	LinkedRosterID     *uuid.UUID `json:"linked_roster_id"`
-	ActiveHoursStart   *string    `json:"active_hours_start"` // HH:MM
-	ActiveHoursEnd     *string    `json:"active_hours_end"`   // HH:MM
-	EscalationPolicyID *uuid.UUID `json:"escalation_policy_id"`
-	EndDate            *string    `json:"end_date"` // YYYY-MM-DD, optional
+	Name                string     `json:"name" validate:"required,min=2"`
+	Description         *string    `json:"description"`
+	Timezone            string     `json:"timezone" validate:"required"`
+	HandoffTime         string     `json:"handoff_time" validate:"required"` // HH:MM
+	HandoffDay          int        `json:"handoff_day"`                      // 0=Sun..6=Sat, default 1=Mon
+	ScheduleWeeksAhead  int        `json:"schedule_weeks_ahead"`             // default 12
+	MaxConsecutiveWeeks int        `json:"max_consecutive_weeks"`            // default 2
+	IsFollowTheSun      bool       `json:"is_follow_the_sun"`
+	LinkedRosterID      *uuid.UUID `json:"linked_roster_id"`
+	ActiveHoursStart    *string    `json:"active_hours_start"` // HH:MM
+	ActiveHoursEnd      *string    `json:"active_hours_end"`   // HH:MM
+	EscalationPolicyID  *uuid.UUID `json:"escalation_policy_id"`
+	EndDate             *string    `json:"end_date"` // YYYY-MM-DD, optional
 }
 
 // UpdateRosterRequest is the JSON body for PUT /api/v1/rosters/:id.
@@ -74,13 +74,13 @@ type UpdateMemberRequest struct {
 
 // MemberResponse is the JSON response for a roster member.
 type MemberResponse struct {
-	ID                  uuid.UUID  `json:"id"`
-	RosterID            uuid.UUID  `json:"roster_id"`
-	UserID              uuid.UUID  `json:"user_id"`
-	DisplayName         string     `json:"display_name"`
-	IsActive            bool       `json:"is_active"`
-	JoinedAt            time.Time  `json:"joined_at"`
-	LeftAt              *time.Time `json:"left_at,omitempty"`
+	ID                   uuid.UUID  `json:"id"`
+	RosterID             uuid.UUID  `json:"roster_id"`
+	UserID               uuid.UUID  `json:"user_id"`
+	DisplayName          string     `json:"display_name"`
+	IsActive             bool       `json:"is_active"`
+	JoinedAt             time.Time  `json:"joined_at"`
+	LeftAt               *time.Time `json:"left_at,omitempty"`
 	PrimaryWeeksServed   int        `json:"primary_weeks_served"`
 	SecondaryWeeksServed int        `json:"secondary_weeks_served"`
 }
@@ -144,13 +144,13 @@ type OverrideResponse struct {
 
 // OnCallResponse describes who is currently on-call.
 type OnCallResponse struct {
-	RosterID       uuid.UUID    `json:"roster_id"`
-	RosterName     string       `json:"roster_name"`
-	QueriedAt      time.Time    `json:"queried_at"`
-	Source         string       `json:"source"` // "override" | "schedule" | "unassigned"
-	Primary        *OnCallEntry `json:"primary"`
-	Secondary      *OnCallEntry `json:"secondary"`
-	WeekStart      *string      `json:"week_start,omitempty"`
+	RosterID       uuid.UUID         `json:"roster_id"`
+	RosterName     string            `json:"roster_name"`
+	QueriedAt      time.Time         `json:"queried_at"`
+	Source         string            `json:"source"` // "override" | "schedule" | "unassigned"
+	Primary        *OnCallEntry      `json:"primary"`
+	Secondary      *OnCallEntry      `json:"secondary"`
+	WeekStart      *string           `json:"week_start,omitempty"`
 	ActiveOverride *OverrideResponse `json:"active_override,omitempty"`
 }
 
@@ -191,9 +191,9 @@ type CoverageRoster struct {
 
 // CoverageSlot is one time slot in the coverage heatmap.
 type CoverageSlot struct {
-	Time     time.Time              `json:"time"`
-	Coverage []CoverageSlotRoster   `json:"coverage"`
-	Gap      bool                   `json:"gap"`
+	Time     time.Time            `json:"time"`
+	Coverage []CoverageSlotRoster `json:"coverage"`
+	Gap      bool                 `json:"gap"`
 }
 
 // CoverageSlotRoster describes a roster's coverage during a slot.

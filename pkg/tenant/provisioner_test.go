@@ -15,14 +15,14 @@ func TestSlugValidation(t *testing.T) {
 		{"ab", true},
 		{"a_very_long_slug_that_is_still_valid_abcdef", true},
 		{"", false},
-		{"A", false},           // uppercase
-		{"1abc", false},        // starts with digit
-		{"-abc", false},        // starts with dash
-		{"a", false},           // too short (min 2)
-		{"has space", false},   // contains space
-		{"has-dash", false},    // contains dash
-		{"UPPERCASE", false},   // all uppercase
-		{"a.b", false},         // contains dot
+		{"A", false},         // uppercase
+		{"1abc", false},      // starts with digit
+		{"-abc", false},      // starts with dash
+		{"a", false},         // too short (min 2)
+		{"has space", false}, // contains space
+		{"has-dash", false},  // contains dash
+		{"UPPERCASE", false}, // all uppercase
+		{"a.b", false},       // contains dot
 	}
 	for _, tt := range tests {
 		t.Run(tt.slug, func(t *testing.T) {

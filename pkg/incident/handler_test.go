@@ -1,7 +1,6 @@
 package incident
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,54 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// --- Fake store/service for handler tests ---
-
-// fakeStore implements enough of the Store behaviour for handler tests by
-// delegating to function fields that each test can set up as needed.
-type fakeStore struct {
-	getFn           func(ctx context.Context, id uuid.UUID) (IncidentRow, error)
-	createFn        func(ctx context.Context, p CreateParams) (IncidentRow, error)
-	updateFn        func(ctx context.Context, p UpdateParams) (IncidentRow, error)
-	softDeleteFn    func(ctx context.Context, id uuid.UUID) error
-	listFilteredFn  func(ctx context.Context, f ListFilters, limit, offset int) ([]IncidentRow, error)
-	countFilteredFn func(ctx context.Context, f ListFilters) (int, error)
-	createHistoryFn func(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error
-	listHistoryFn   func(ctx context.Context, incidentID uuid.UUID) ([]HistoryEntry, error)
-}
-
-func (f *fakeStore) Get(ctx context.Context, id uuid.UUID) (IncidentRow, error) {
-	return f.getFn(ctx, id)
-}
-func (f *fakeStore) Create(ctx context.Context, p CreateParams) (IncidentRow, error) {
-	return f.createFn(ctx, p)
-}
-func (f *fakeStore) Update(ctx context.Context, p UpdateParams) (IncidentRow, error) {
-	return f.updateFn(ctx, p)
-}
-func (f *fakeStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	return f.softDeleteFn(ctx, id)
-}
-func (f *fakeStore) ListFiltered(ctx context.Context, f2 ListFilters, limit, offset int) ([]IncidentRow, error) {
-	return f.listFilteredFn(ctx, f2, limit, offset)
-}
-func (f *fakeStore) CountFiltered(ctx context.Context, f2 ListFilters) (int, error) {
-	return f.countFilteredFn(ctx, f2)
-}
-func (f *fakeStore) CreateHistory(ctx context.Context, incidentID uuid.UUID, changedBy pgtype.UUID, changeType string, diff json.RawMessage) error {
-	if f.createHistoryFn != nil {
-		return f.createHistoryFn(ctx, incidentID, changedBy, changeType, diff)
-	}
-	return nil
-}
-func (f *fakeStore) ListHistory(ctx context.Context, incidentID uuid.UUID) ([]HistoryEntry, error) {
-	if f.listHistoryFn != nil {
-		return f.listHistoryFn(ctx, incidentID)
-	}
-	return nil, nil
-}
 
 func sampleRow() IncidentRow {
 	return IncidentRow{

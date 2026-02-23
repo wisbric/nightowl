@@ -628,8 +628,8 @@ func (h *Handler) handleGetCoverage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := r.URL.Query().Get("resolution"); v != "" {
-		if n, err := fmt.Sscanf(v, "%d", &resolution); n == 1 && err == nil && resolution > 0 {
-			// valid
+		if n, err := fmt.Sscanf(v, "%d", &resolution); n != 1 || err != nil || resolution <= 0 {
+			resolution = 60
 		}
 	}
 

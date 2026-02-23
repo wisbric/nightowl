@@ -17,11 +17,11 @@ type APIKeyAuthenticator struct {
 
 // APIKeyResult holds the resolved identity data from an API key lookup.
 type APIKeyResult struct {
-	APIKeyID   uuid.UUID
-	TenantID   uuid.UUID
-	KeyPrefix  string
-	Role       string
-	Scopes     []string
+	APIKeyID  uuid.UUID
+	TenantID  uuid.UUID
+	KeyPrefix string
+	Role      string
+	Scopes    []string
 }
 
 // Authenticate hashes the raw key, looks it up in public.api_keys, and

@@ -191,4 +191,3 @@ func respondDialogError(w http.ResponseWriter, msg string) {
 		"errors": map[string]string{"": msg},
 	})
 }
-

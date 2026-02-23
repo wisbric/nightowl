@@ -30,8 +30,8 @@ type AlertMessage struct {
 	RunbookURL   string // deep link to runbook in NightOwl UI
 
 	// On-call context
-	PrimaryOnCall  string // display name
-	PrimaryUserRef string // platform user ref for @mention
+	PrimaryOnCall   string // display name
+	PrimaryUserRef  string // platform user ref for @mention
 	SecondaryOnCall string
 
 	// Action URLs (for button callbacks)

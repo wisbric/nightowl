@@ -63,18 +63,18 @@ type EventResponse struct {
 
 // DryRunRequest is the JSON body for POST /api/v1/escalation-policies/:id/dry-run.
 type DryRunRequest struct {
-	AlertTitle   string `json:"alert_title"`
+	AlertTitle    string `json:"alert_title"`
 	AlertSeverity string `json:"alert_severity"`
 }
 
 // DryRunStep describes a simulated escalation step.
 type DryRunStep struct {
-	Tier           int      `json:"tier"`
-	TimeoutMinutes int      `json:"timeout_minutes"`
-	CumulativeMinutes int   `json:"cumulative_minutes"`
-	NotifyVia      []string `json:"notify_via"`
-	Targets        []string `json:"targets"`
-	Action         string   `json:"action"`
+	Tier              int      `json:"tier"`
+	TimeoutMinutes    int      `json:"timeout_minutes"`
+	CumulativeMinutes int      `json:"cumulative_minutes"`
+	NotifyVia         []string `json:"notify_via"`
+	Targets           []string `json:"targets"`
+	Action            string   `json:"action"`
 }
 
 // DryRunResponse is the response for a dry-run simulation.

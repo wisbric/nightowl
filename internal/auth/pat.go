@@ -21,12 +21,12 @@ const MethodPAT = "pat"
 
 // PATAuthResult holds resolved identity data from a PAT lookup.
 type PATAuthResult struct {
-	UserID     uuid.UUID
-	Email      string
+	UserID      uuid.UUID
+	Email       string
 	DisplayName string
-	Role       string
-	TenantSlug string
-	TenantID   uuid.UUID
+	Role        string
+	TenantSlug  string
+	TenantID    uuid.UUID
 }
 
 // PATAuthenticator validates personal access tokens across tenant schemas.

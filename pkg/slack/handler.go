@@ -19,11 +19,11 @@ import (
 
 // Handler provides HTTP handlers for Slack integration.
 type Handler struct {
-	notifier       *Notifier
-	pool           *pgxpool.Pool
-	logger         *slog.Logger
-	signingSecret  string
-	defaultTenant  string // slug of the default tenant for Slack interactions
+	notifier      *Notifier
+	pool          *pgxpool.Pool
+	logger        *slog.Logger
+	signingSecret string
+	defaultTenant string // slug of the default tenant for Slack interactions
 }
 
 // NewHandler creates a Slack Handler.

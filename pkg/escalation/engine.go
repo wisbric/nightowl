@@ -44,7 +44,7 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	// Subscribe to acknowledgment events via Redis pub/sub.
 	pubsub := e.rdb.Subscribe(ctx, "nightowl:alert:ack")
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }()
 
 	ackCh := pubsub.Channel()
 	ticker := time.NewTicker(e.interval)

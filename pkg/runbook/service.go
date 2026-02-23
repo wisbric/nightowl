@@ -28,10 +28,10 @@ func NewService(dbtx db.DBTX, logger *slog.Logger) *Service {
 // Create creates a new runbook.
 func (s *Service) Create(ctx context.Context, req CreateRequest, userID pgtype.UUID) (Response, error) {
 	row, err := s.store.Create(ctx, CreateParams{
-		Title:    req.Title,
-		Content:  req.Content,
-		Category: req.Category,
-		Tags:     defaultSlice(req.Tags),
+		Title:     req.Title,
+		Content:   req.Content,
+		Category:  req.Category,
+		Tags:      defaultSlice(req.Tags),
 		CreatedBy: userID,
 	})
 	if err != nil {

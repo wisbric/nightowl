@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -82,7 +83,7 @@ func (e *Enricher) matchByFingerprint(ctx context.Context, dbtx db.DBTX, fingerp
 	var runbookContent *string
 	err := dbtx.QueryRow(ctx, query, fingerprint).Scan(&incidentID, &solution, &runbookID, &runbookContent)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return EnrichResult{}, nil
 		}
 		return EnrichResult{}, fmt.Errorf("fingerprint lookup: %w", err)
@@ -113,7 +114,7 @@ func (e *Enricher) matchByTextSearch(ctx context.Context, dbtx db.DBTX, searchQu
 	var rank float32
 	err := dbtx.QueryRow(ctx, query, searchQuery).Scan(&incidentID, &solution, &runbookID, &runbookContent, &rank)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return EnrichResult{}, nil
 		}
 		return EnrichResult{}, fmt.Errorf("text search: %w", err)

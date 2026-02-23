@@ -2,7 +2,7 @@ package tenantconfig
 
 // TenantConfig is the JSONB config stored in public.tenants.config.
 type TenantConfig struct {
-	MessagingProvider          string `json:"messaging_provider"`            // "slack", "mattermost", "none"
+	MessagingProvider          string `json:"messaging_provider"` // "slack", "mattermost", "none"
 	SlackWorkspaceURL          string `json:"slack_workspace_url"`
 	SlackChannel               string `json:"slack_channel"`
 	MattermostURL              string `json:"mattermost_url"`

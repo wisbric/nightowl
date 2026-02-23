@@ -305,7 +305,7 @@ func (s *Service) GetCoverage(ctx context.Context, req CoverageRequest) (*Covera
 				RosterName: r.Name,
 				Primary:    primary,
 				Secondary:  secondary,
-				Source:      source,
+				Source:     source,
 			})
 		}
 
@@ -399,33 +399,6 @@ func (s *Service) resolveFromCache(rc *coverageCache, rosterID uuid.UUID, at tim
 	}
 
 	return "", "", "unassigned"
-}
-
-// getFollowTheSunOnCall determines which sub-roster is active based on active hours.
-// The response always carries the *requested* roster's identity, even when
-// delegated to the linked roster for on-call resolution.
-func (s *Service) getFollowTheSunOnCall(ctx context.Context, roster RosterResponse, at time.Time) (*OnCallResponse, error) {
-	if s.isInActiveHours(roster, at) {
-		return s.resolveOnCall(ctx, roster, at)
-	}
-	if roster.LinkedRosterID != nil {
-		linkedRoster, err := s.store.GetRoster(ctx, *roster.LinkedRosterID)
-		if err != nil {
-			return nil, fmt.Errorf("getting linked roster: %w", err)
-		}
-		if s.isInActiveHours(linkedRoster, at) {
-			resp, err := s.resolveOnCall(ctx, linkedRoster, at)
-			if err != nil {
-				return nil, err
-			}
-			// Preserve the originally requested roster's identity.
-			resp.RosterID = roster.ID
-			resp.RosterName = roster.Name
-			return resp, nil
-		}
-	}
-	// Fallback: use this roster.
-	return s.resolveOnCall(ctx, roster, at)
 }
 
 func (s *Service) isInActiveHours(roster RosterResponse, at time.Time) bool {

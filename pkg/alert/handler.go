@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -76,7 +77,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	q := db.New(conn)
 	row, err := q.GetAlert(ctx, id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httpserver.RespondError(w, http.StatusNotFound, "not_found", "alert not found")
 			return
 		}
@@ -111,7 +112,7 @@ func (h *Handler) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 		AcknowledgedBy: acknowledgedBy,
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httpserver.RespondError(w, http.StatusNotFound, "not_found", "alert not found")
 			return
 		}
@@ -151,7 +152,7 @@ func (h *Handler) handleResolve(w http.ResponseWriter, r *http.Request) {
 		ResolvedBy: resolvedBy,
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			httpserver.RespondError(w, http.StatusNotFound, "not_found", "alert not found")
 			return
 		}

@@ -33,7 +33,7 @@ func Decode(r *http.Request, dst any) error {
 	const maxBody = 1 << 20 // 1 MiB
 
 	body := http.MaxBytesReader(nil, r.Body, maxBody)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	dec := json.NewDecoder(body)
 	dec.DisallowUnknownFields()

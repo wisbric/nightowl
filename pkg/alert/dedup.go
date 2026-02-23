@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -60,7 +61,7 @@ func (d *Deduplicator) Check(ctx context.Context, tenantSchema, fingerprint stri
 			return DedupResult{IsDuplicate: true, AlertID: id}, nil
 		}
 		d.logger.Warn("invalid UUID in dedup cache", "key", key, "value", val)
-	} else if err != redis.Nil {
+	} else if !errors.Is(err, redis.Nil) {
 		// Redis error — log and fall through to DB.
 		d.logger.Warn("redis dedup lookup failed, falling back to DB", "error", err)
 	}
@@ -69,7 +70,7 @@ func (d *Deduplicator) Check(ctx context.Context, tenantSchema, fingerprint stri
 	q := db.New(dbtx)
 	alert, err := q.GetAlertByFingerprint(ctx, fingerprint)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return DedupResult{IsDuplicate: false}, nil
 		}
 		return DedupResult{}, fmt.Errorf("dedup DB lookup: %w", err)

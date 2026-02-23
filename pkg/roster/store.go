@@ -2,6 +2,7 @@ package roster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -398,7 +399,7 @@ func (s *Store) GetScheduleWeek(ctx context.Context, rosterID uuid.UUID, weekSta
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("getting schedule week: %w", err)
@@ -432,7 +433,7 @@ func (s *Store) GetScheduleForTime(ctx context.Context, rosterID uuid.UUID, at t
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("getting schedule for time: %w", err)
@@ -636,7 +637,7 @@ func (s *Store) GetActiveOverride(ctx context.Context, rosterID uuid.UUID, at ti
 		&o.StartAt, &o.EndAt, &o.Reason, &createdBy, &o.CreatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("checking active override: %w", err)

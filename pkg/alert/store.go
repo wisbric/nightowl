@@ -57,7 +57,7 @@ func alertRowToResponse(row db.Alert) Response {
 		Fingerprint:       row.Fingerprint,
 		Status:            row.Status,
 		Severity:          row.Severity,
-		Source:             row.Source,
+		Source:            row.Source,
 		Title:             row.Title,
 		Description:       row.Description,
 		Labels:            row.Labels,

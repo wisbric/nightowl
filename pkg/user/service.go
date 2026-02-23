@@ -49,14 +49,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Response, error) {
 
 // Create creates a new user.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (Response, error) {
-	row, err := s.store.Create(ctx, CreateUserParams{
-		Email:       req.Email,
-		DisplayName: req.DisplayName,
-		Role:        req.Role,
-		Timezone:    req.Timezone,
-		Phone:       req.Phone,
-		SlackUserID: req.SlackUserID,
-	})
+	row, err := s.store.Create(ctx, CreateUserParams(req))
 	if err != nil {
 		return Response{}, fmt.Errorf("creating user: %w", err)
 	}
@@ -65,14 +58,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Response, erro
 
 // Update updates a user.
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (Response, error) {
-	row, err := s.store.Update(ctx, id, UpdateUserParams{
-		Email:       req.Email,
-		DisplayName: req.DisplayName,
-		Role:        req.Role,
-		Timezone:    req.Timezone,
-		Phone:       req.Phone,
-		SlackUserID: req.SlackUserID,
-	})
+	row, err := s.store.Update(ctx, id, UpdateUserParams(req))
 	if err != nil {
 		return Response{}, fmt.Errorf("updating user: %w", err)
 	}

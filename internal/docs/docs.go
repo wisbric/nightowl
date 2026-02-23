@@ -14,7 +14,7 @@ var swaggerHTML []byte
 func SwaggerUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(swaggerHTML)
+		_, _ = w.Write(swaggerHTML)
 	}
 }
 
@@ -22,6 +22,6 @@ func SwaggerUIHandler() http.HandlerFunc {
 func OpenAPISpecHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
-		w.Write(api.OpenAPISpec)
+		_, _ = w.Write(api.OpenAPISpec)
 	}
 }

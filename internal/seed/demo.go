@@ -233,12 +233,12 @@ func RunDemo(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir
 	// ── Knowledge Base Incidents ────────────────────────────────────────
 	type incSpec struct {
 		title, severity, category string
-		fps, tags, services      []string
-		clusters, namespaces     []string
-		symptoms, rootCause, sol string
-		errorPatterns            []string
-		runbookID                pgtype.UUID
-		createdBy                pgtype.UUID
+		fps, tags, services       []string
+		clusters, namespaces      []string
+		symptoms, rootCause, sol  string
+		errorPatterns             []string
+		runbookID                 pgtype.UUID
+		createdBy                 pgtype.UUID
 	}
 
 	incSpecs := []incSpec{
