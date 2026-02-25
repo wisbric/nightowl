@@ -28,7 +28,7 @@ interface SearchRow {
 }
 
 export function IncidentListPage() {
-  useTitle("Knowledge Base");
+  useTitle("Incidents");
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -74,7 +74,7 @@ export function IncidentListPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Knowledge Base</h1>
+        <h1 className="text-2xl font-bold">Incidents</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -136,8 +136,8 @@ export function IncidentListPage() {
               />
             ) : (
               <EmptyState
-                title="Knowledge base is empty"
-                description="Create your first incident to build operational knowledge."
+                title="No incidents yet"
+                description="Create your first incident to start tracking operational issues."
                 action={
                   <Link to="/incidents/$incidentId" params={{ incidentId: "new" }}>
                     <Button>New Incident</Button>

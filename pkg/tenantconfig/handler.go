@@ -3,8 +3,10 @@ package tenantconfig
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,6 +42,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/", h.handleGet)
 	r.Put("/", h.handleUpdate)
 	r.Post("/messaging/test", h.handleTestMessaging)
+	r.Post("/bookowl/test", h.handleTestBookOwl)
 	return r
 }
 
@@ -161,5 +164,65 @@ func (h *Handler) testMattermost(ctx context.Context, w http.ResponseWriter, req
 	httpserver.Respond(w, http.StatusOK, TestMessagingResponse{
 		OK:      true,
 		BotName: me.Username,
+	})
+}
+
+// TestBookOwlRequest is the JSON body for POST /admin/config/bookowl/test.
+type TestBookOwlRequest struct {
+	URL    string `json:"url" validate:"required"`
+	APIKey string `json:"api_key" validate:"required"`
+}
+
+// TestBookOwlResponse is the JSON response for the BookOwl test connection endpoint.
+type TestBookOwlResponse struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	Count int    `json:"count,omitempty"`
+}
+
+func (h *Handler) handleTestBookOwl(w http.ResponseWriter, r *http.Request) {
+	var req TestBookOwlRequest
+	if !httpserver.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Call BookOwl's integration runbooks endpoint with limit=1 to verify connection.
+	testURL := fmt.Sprintf("%s/integration/runbooks?limit=1", req.URL)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
+	if err != nil {
+		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{OK: false, Error: "invalid URL"})
+		return
+	}
+	httpReq.Header.Set("X-API-Key", req.APIKey)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{OK: false, Error: err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{
+			OK:    false,
+			Error: fmt.Sprintf("BookOwl returned HTTP %d", resp.StatusCode),
+		})
+		return
+	}
+
+	var body struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{OK: false, Error: "invalid response from BookOwl"})
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{
+		OK:    true,
+		Count: body.Total,
 	})
 }

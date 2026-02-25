@@ -10,6 +10,8 @@ type TenantConfig struct {
 	TwilioSID                  string `json:"twilio_sid"`
 	TwilioPhoneNumber          string `json:"twilio_phone_number"`
 	DefaultTimezone            string `json:"default_timezone"`
+	BookOwlAPIURL              string `json:"bookowl_api_url"`
+	BookOwlAPIKey              string `json:"bookowl_api_key"`
 }
 
 // UpdateRequest is the payload for PUT /admin/config.
@@ -22,6 +24,8 @@ type UpdateRequest struct {
 	TwilioSID                  string `json:"twilio_sid"`
 	TwilioPhoneNumber          string `json:"twilio_phone_number"`
 	DefaultTimezone            string `json:"default_timezone" validate:"required"`
+	BookOwlAPIURL              string `json:"bookowl_api_url"`
+	BookOwlAPIKey              string `json:"bookowl_api_key"`
 }
 
 // ConfigResponse is the JSON response for GET /admin/config.
@@ -34,5 +38,7 @@ type ConfigResponse struct {
 	TwilioSID                  string `json:"twilio_sid"`
 	TwilioPhoneNumber          string `json:"twilio_phone_number"`
 	DefaultTimezone            string `json:"default_timezone"`
+	BookOwlAPIURL              string `json:"bookowl_api_url"`
+	BookOwlAPIKey              string `json:"bookowl_api_key"`
 	UpdatedAt                  string `json:"updated_at"`
 }

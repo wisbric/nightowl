@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
@@ -24,6 +25,7 @@ import (
 	"github.com/wisbric/nightowl/internal/version"
 	"github.com/wisbric/nightowl/pkg/alert"
 	"github.com/wisbric/nightowl/pkg/apikey"
+	"github.com/wisbric/nightowl/pkg/bookowl"
 	"github.com/wisbric/nightowl/pkg/escalation"
 	"github.com/wisbric/nightowl/pkg/incident"
 	"github.com/wisbric/nightowl/pkg/integration"
@@ -31,7 +33,6 @@ import (
 	"github.com/wisbric/nightowl/pkg/messaging"
 	"github.com/wisbric/nightowl/pkg/pat"
 	"github.com/wisbric/nightowl/pkg/roster"
-	"github.com/wisbric/nightowl/pkg/runbook"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
 	"github.com/wisbric/nightowl/pkg/tenantconfig"
 	"github.com/wisbric/nightowl/pkg/user"
@@ -142,13 +143,23 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, sessionMgr, oidcAuth, patAuth)
 
 	// --- Auth routes (public, pre-authentication) ---
+
+	// Rate limiter: 10 failed attempts per IP per 15 minutes.
+	rateLimiter := auth.NewRateLimiter(rdb, 10, 15*time.Minute)
+
+	// Local admin login and change-password.
+	localAdminHandler := auth.NewLocalAdminHandler(sessionMgr, db, logger, rateLimiter)
+	srv.Router.Post("/auth/local", localAdminHandler.HandleLocalLogin)
+	srv.Router.Post("/auth/change-password", localAdminHandler.HandleChangePassword)
+	srv.Router.Get("/auth/config", localAdminHandler.HandleAuthConfig)
+
+	// Existing email/password login (for tenant users, not local admins).
 	loginHandler := auth.NewLoginHandler(sessionMgr, db, logger, oidcAuth != nil)
 	srv.Router.Post("/auth/login", loginHandler.HandleLogin)
-	srv.Router.Get("/auth/config", loginHandler.HandleAuthConfig)
 	srv.Router.Get("/auth/me", loginHandler.HandleMe)
 	srv.Router.Post("/auth/logout", loginHandler.HandleLogout)
 
-	// OIDC Authorization Code flow (only if OIDC is configured).
+	// OIDC Authorization Code flow (only if OIDC is configured via env vars).
 	if oidcAuth != nil && cfg.OIDCClientSecret != "" {
 		oauth2Cfg := &oauth2.Config{
 			ClientID:     cfg.OIDCClientID,
@@ -176,9 +187,6 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	incidentHandler := incident.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/incidents", incidentHandler.Routes())
 
-	runbookHandler := runbook.NewHandler(logger, auditWriter)
-	srv.APIRouter.Mount("/runbooks", runbookHandler.Routes())
-
 	alertHandler := alert.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/alerts", alertHandler.Routes())
 
@@ -204,6 +212,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	userHandler := user.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/users", userHandler.Routes())
+	srv.APIRouter.Mount("/user/preferences", userHandler.PreferencesRoutes())
 
 	apikeyHandler := apikey.NewHandler(logger, auditWriter, db)
 	srv.APIRouter.Mount("/api-keys", apikeyHandler.Routes())
@@ -214,8 +223,24 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	auditHandler := audit.NewHandler(logger)
 	srv.APIRouter.Mount("/audit-log", auditHandler.Routes())
 
+	bookowlHandler := bookowl.NewHandler(logger, db)
+	srv.APIRouter.Mount("/bookowl", bookowlHandler.Routes())
+
 	tenantConfigHandler := tenantconfig.NewHandler(logger, auditWriter, db)
 	srv.APIRouter.Mount("/admin/config", tenantConfigHandler.Routes())
+
+	// OIDC admin config endpoints (admin role required).
+	oidcAdminHandler := auth.NewOIDCAdminHandler(db, logger, sessionSecret)
+	srv.APIRouter.Route("/admin/oidc", func(r chi.Router) {
+		r.Use(auth.RequireRole(auth.RoleAdmin))
+		r.Get("/config", oidcAdminHandler.HandleGetOIDCConfig)
+		r.Put("/config", oidcAdminHandler.HandleUpdateOIDCConfig)
+		r.Post("/test", oidcAdminHandler.HandleTestOIDCConnection)
+	})
+	srv.APIRouter.Route("/admin/local-admin", func(r chi.Router) {
+		r.Use(auth.RequireRole(auth.RoleAdmin))
+		r.Post("/reset", oidcAdminHandler.HandleResetLocalAdmin)
+	})
 
 	// --- Messaging provider registry ---
 	msgRegistry := messaging.NewRegistry()

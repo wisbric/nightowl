@@ -26,8 +26,11 @@ import { AboutPage } from "@/pages/about";
 import { NotFoundPage } from "@/pages/not-found";
 import { SettingsPage } from "@/pages/settings";
 import { SettingsTokensPage } from "@/pages/settings-tokens";
+import { SettingsPreferencesPage } from "@/pages/settings-preferences";
 import { LoginPage } from "@/pages/login";
 import { AuthCallbackPage } from "@/pages/auth-callback";
+import { ChangePasswordPage } from "@/pages/change-password";
+import { AdminAuthPage } from "@/pages/admin-auth";
 import "./index.css";
 
 initTheme();
@@ -66,6 +69,7 @@ const appLayoutRoute = createRoute({
 
 // Public routes (no auth required).
 const loginRoute = createRoute({ getParentRoute: () => publicRootRoute, path: "/login", component: LoginPage });
+const changePasswordRoute = createRoute({ getParentRoute: () => publicRootRoute, path: "/change-password", component: ChangePasswordPage });
 const authCallbackRoute = createRoute({
   getParentRoute: () => publicRootRoute,
   path: "/auth/callback",
@@ -91,15 +95,18 @@ const adminRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/a
 const adminUsersRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/admin/users", component: AdminUsersPage });
 const adminApiKeysRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/admin/api-keys", component: AdminApiKeysPage });
 const adminConfigRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/admin/config", component: AdminConfigPage });
+const adminAuthRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/admin/auth", component: AdminAuthPage });
 const auditLogRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/admin/audit-log", component: AuditLogPage });
 const statusRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/status", component: StatusPage });
 const aboutRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/about", component: AboutPage });
 const settingsRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/settings", component: SettingsPage });
 const settingsTokensRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/settings/tokens", component: SettingsTokensPage });
+const settingsPreferencesRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/settings/preferences", component: SettingsPreferencesPage });
 const notFoundRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "$", component: NotFoundPage });
 
 const routeTree = publicRootRoute.addChildren([
   loginRoute,
+  changePasswordRoute,
   authCallbackRoute,
   appLayoutRoute.addChildren([
     indexRoute,
@@ -117,10 +124,12 @@ const routeTree = publicRootRoute.addChildren([
     aboutRoute,
     settingsRoute,
     settingsTokensRoute,
+    settingsPreferencesRoute,
     adminRoute,
     adminUsersRoute,
     adminApiKeysRoute,
     adminConfigRoute,
+    adminAuthRoute,
     auditLogRoute,
     notFoundRoute,
   ]),

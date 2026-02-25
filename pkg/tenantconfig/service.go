@@ -52,6 +52,8 @@ func (s *Service) Get(ctx context.Context, tenantID uuid.UUID) (*ConfigResponse,
 		TwilioSID:                  cfg.TwilioSID,
 		TwilioPhoneNumber:          cfg.TwilioPhoneNumber,
 		DefaultTimezone:            cfg.DefaultTimezone,
+		BookOwlAPIURL:              cfg.BookOwlAPIURL,
+		BookOwlAPIKey:              cfg.BookOwlAPIKey,
 		UpdatedAt:                  t.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
@@ -80,6 +82,8 @@ func (s *Service) Update(ctx context.Context, tenantID uuid.UUID, req UpdateRequ
 		TwilioSID:                  req.TwilioSID,
 		TwilioPhoneNumber:          req.TwilioPhoneNumber,
 		DefaultTimezone:            req.DefaultTimezone,
+		BookOwlAPIURL:              req.BookOwlAPIURL,
+		BookOwlAPIKey:              req.BookOwlAPIKey,
 	}
 
 	configBytes, err := json.Marshal(cfg)
@@ -105,6 +109,8 @@ func (s *Service) Update(ctx context.Context, tenantID uuid.UUID, req UpdateRequ
 		TwilioSID:                  cfg.TwilioSID,
 		TwilioPhoneNumber:          cfg.TwilioPhoneNumber,
 		DefaultTimezone:            cfg.DefaultTimezone,
+		BookOwlAPIURL:              cfg.BookOwlAPIURL,
+		BookOwlAPIKey:              cfg.BookOwlAPIKey,
 		UpdatedAt:                  updated.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }

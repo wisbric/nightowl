@@ -409,6 +409,8 @@ export interface TenantConfigResponse {
   twilio_sid: string;
   twilio_phone_number: string;
   default_timezone: string;
+  bookowl_api_url: string;
+  bookowl_api_key: string;
   updated_at: string;
 }
 
@@ -430,4 +432,66 @@ export interface StatusResponse {
   redis: string;
   redis_latency_ms: number;
   last_alert_at: string | null;
+}
+
+// --- BookOwl Integration ---
+
+export interface BookOwlStatusResponse {
+  integrated: boolean;
+  url?: string;
+}
+
+export interface BookOwlRunbookListItem {
+  id: string;
+  title: string;
+  slug: string;
+  tags: string[];
+  url: string;
+  updated_at: string;
+}
+
+export interface BookOwlRunbookListResponse {
+  items: BookOwlRunbookListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BookOwlRunbookDetail {
+  id: string;
+  title: string;
+  slug: string;
+  content_text: string;
+  content_html: string;
+  url: string;
+  tags: string[];
+  updated_at: string;
+}
+
+export interface BookOwlPostMortemResponse {
+  id: string;
+  url: string;
+  title: string;
+}
+
+export interface TestBookOwlResponse {
+  ok: boolean;
+  error?: string;
+  count?: number;
+}
+
+// --- User Preferences ---
+
+export interface UserPreferences {
+  timezone?: string;
+  theme?: string;
+  notifications?: {
+    critical: boolean;
+    major: boolean;
+    warning: boolean;
+    info: boolean;
+  };
+  dashboard?: {
+    default_time_range?: string;
+  };
 }

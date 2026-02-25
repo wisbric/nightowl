@@ -13,7 +13,6 @@ import (
 
 	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/db"
-	"github.com/wisbric/nightowl/pkg/runbook"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 
@@ -133,22 +132,6 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 	}
 	logger.Info("seed: created service", "service", svc2.Name, "id", svc2.ID)
 
-	// Seed runbook templates.
-	rbStore := runbook.NewStore(conn)
-	templates := runbook.TemplateRunbooks()
-	for _, tmpl := range templates {
-		if _, err := rbStore.Create(ctx, runbook.CreateParams{
-			Title:      tmpl.Title,
-			Content:    tmpl.Content,
-			Category:   tmpl.Category,
-			IsTemplate: true,
-			Tags:       tmpl.Tags,
-		}); err != nil {
-			return fmt.Errorf("seeding runbook template %q: %w", tmpl.Title, err)
-		}
-	}
-	logger.Info("seed: created runbook templates", "count", len(templates))
-
 	// Create a development API key (uses the global queries, not tenant-scoped).
 	apiKeyHash := auth.HashAPIKey(DevAPIKey)
 	apiKey, err := q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
@@ -167,6 +150,22 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 		"prefix", apiKey.KeyPrefix,
 		"raw_key", DevAPIKey,
 	)
+
+	// Create local admin for this tenant.
+	localAdminPassword := "nightowl-admin"
+	adminPasswordHash, err := bcrypt.GenerateFromPassword([]byte(localAdminPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hashing local admin password: %w", err)
+	}
+
+	_, err = pool.Exec(ctx,
+		"INSERT INTO public.local_admins (tenant_id, username, password_hash, must_change) VALUES ($1, 'admin', $2, true) ON CONFLICT (tenant_id) DO NOTHING",
+		info.ID, string(adminPasswordHash),
+	)
+	if err != nil {
+		return fmt.Errorf("creating local admin: %w", err)
+	}
+	logger.Info("seed: created local admin", "username", "admin", "password", localAdminPassword)
 
 	logger.Info("seed: completed successfully",
 		"tenant", info.Slug,

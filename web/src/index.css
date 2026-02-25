@@ -2,16 +2,13 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-
+@theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--fg);
-  --color-card: var(--card-bg);
-  --color-card-foreground: var(--card-fg);
   --color-muted: var(--muted-bg);
   --color-muted-foreground: var(--muted-fg);
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--card-fg);
   --color-border: var(--border-color);
   --color-input: var(--input-color);
   --color-ring: var(--ring-color);
@@ -21,71 +18,88 @@
   --color-secondary-foreground: var(--secondary-fg);
   --color-accent: var(--accent-bg);
   --color-accent-foreground: var(--accent-fg);
-  --color-destructive: #DC2626;
-  --color-destructive-foreground: #FFFFFF;
+  --color-destructive: var(--destructive-bg);
+  --color-destructive-foreground: var(--destructive-fg);
   --color-popover: var(--card-bg);
   --color-popover-foreground: var(--card-fg);
+  --color-sidebar: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-fg);
 
+  /* Severity colors */
   --color-severity-critical: #DC2626;
   --color-severity-warning: #F59E0B;
   --color-severity-info: #3B82F6;
   --color-severity-ok: #10B981;
 
+  /* Status colors */
   --color-status-firing: #DC2626;
   --color-status-ack: #F59E0B;
   --color-status-investigating: #8B5CF6;
   --color-status-resolved: #10B981;
   --color-status-suppressed: #6B7280;
 
-  --color-sidebar: #0A2E24;
-  --color-sidebar-foreground: #E8EAED;
-  --color-sidebar-accent: #00e5a0;
+  /* Font families */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
+  /* Border radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
 }
 
+/* Dark mode (default) — NightOwl design system */
 :root {
-  --bg: #FFFFFF;
-  --fg: #0F1117;
-  --card-bg: #F8F9FA;
-  --card-fg: #0F1117;
-  --muted-bg: #F1F3F5;
-  --muted-fg: #6B7280;
-  --border-color: #E5E7EB;
-  --input-color: #E5E7EB;
+  --bg: #0A0F0D;
+  --fg: #E8ECE9;
+  --muted-bg: #1A2520;
+  --muted-fg: #8B9A91;
+  --card-bg: #111916;
+  --card-fg: #E8ECE9;
+  --border-color: #1E2E27;
+  --input-color: #1E2E27;
   --ring-color: #00e5a0;
+  --primary-bg: #0A2E24;
+  --primary-fg: #00e5a0;
+  --secondary-bg: #374151;
+  --secondary-fg: #FFFFFF;
+  --accent-bg: #00e5a0;
+  --accent-fg: #0A2E24;
+  --destructive-bg: #DC2626;
+  --destructive-fg: #FECACA;
+  --sidebar-bg: #080D0B;
+  --sidebar-fg: #C8D4CC;
+}
+
+/* Light mode override */
+.light {
+  --bg: #FAFCFB;
+  --fg: #0A2E24;
+  --muted-bg: #F0F5F2;
+  --muted-fg: #5A6B62;
+  --card-bg: #FFFFFF;
+  --card-fg: #0A2E24;
+  --border-color: #D4DDD8;
+  --input-color: #D4DDD8;
+  --ring-color: #00C88A;
   --primary-bg: #0A2E24;
   --primary-fg: #FFFFFF;
   --secondary-bg: #374151;
   --secondary-fg: #FFFFFF;
-  --accent-bg: #00e5a0;
-  --accent-fg: #0F1117;
+  --accent-bg: #00C88A;
+  --accent-fg: #0A2E24;
+  --destructive-bg: #DC2626;
+  --destructive-fg: #FFFFFF;
+  --sidebar-bg: #F5F8F6;
+  --sidebar-fg: #1A2520;
 }
 
-.dark {
-  --bg: #0F1117;
-  --fg: #E8EAED;
-  --card-bg: #1A1D27;
-  --card-fg: #E8EAED;
-  --muted-bg: #252830;
-  --muted-fg: #9CA3AF;
-  --border-color: #2D3039;
-  --input-color: #2D3039;
-  --ring-color: #00e5a0;
-  --primary-bg: #0A2E24;
-  --primary-fg: #FFFFFF;
-  --secondary-bg: #374151;
-  --secondary-fg: #FFFFFF;
-  --accent-bg: #00e5a0;
-  --accent-fg: #0F1117;
-}
-
+/* Base styles */
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: var(--font-sans);
 }
 
 * {

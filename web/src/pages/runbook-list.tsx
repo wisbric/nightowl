@@ -1,88 +1,63 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
-import type { RunbooksResponse } from "@/types/api";
+import type { BookOwlStatusResponse, BookOwlRunbookListResponse } from "@/types/api";
+import { ExternalLink } from "lucide-react";
 
 export function RunbookListPage() {
   useTitle("Runbooks");
-  const [categoryFilter, setCategoryFilter] = useState("");
 
-  const params = new URLSearchParams();
-  if (categoryFilter) params.set("category", categoryFilter);
-  params.set("limit", "100");
-
-  const { data: allRunbooksData } = useQuery({
-    queryKey: ["runbooks", ""],
-    queryFn: () => api.get<RunbooksResponse>("/runbooks?limit=100"),
+  const { data: status, isLoading: statusLoading } = useQuery({
+    queryKey: ["bookowl-status"],
+    queryFn: () => api.get<BookOwlStatusResponse>("/bookowl/status"),
   });
 
-  const { data: runbooksData, isLoading } = useQuery({
-    queryKey: ["runbooks", categoryFilter],
-    queryFn: () => api.get<RunbooksResponse>(`/runbooks?${params}`),
+  const integrated = status?.integrated ?? false;
+
+  const { data: runbooksData, isLoading: runbooksLoading } = useQuery({
+    queryKey: ["bookowl-runbooks"],
+    queryFn: () => api.get<BookOwlRunbookListResponse>("/bookowl/runbooks?limit=100"),
+    enabled: integrated,
   });
   const runbooks = runbooksData?.items ?? [];
 
-  const categories = [...new Set((allRunbooksData?.items ?? []).map((r) => r.category).filter(Boolean))].sort();
+  const isLoading = statusLoading || (integrated && runbooksLoading);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Runbooks</h1>
-        <Link to="/runbooks/$runbookId" params={{ runbookId: "new" }}>
-          <Button>Create Runbook</Button>
-        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <CardTitle className="flex-1">All Runbooks</CardTitle>
-            <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-48">
-              <option value="">All categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </Select>
-          </div>
+          <CardTitle>All Runbooks</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <LoadingSpinner />
+          ) : !integrated ? (
+            <EmptyState
+              title="BookOwl not connected"
+              description="Connect BookOwl in Admin > Configuration to view and manage runbooks."
+            />
           ) : runbooks.length === 0 ? (
-            categoryFilter ? (
-              <EmptyState
-                title="No matching runbooks"
-                description="No runbooks in this category. Try a different filter."
-              />
-            ) : (
-              <EmptyState
-                title="No runbooks yet"
-                description="Create runbooks to document procedures for your team."
-                action={
-                  <Link to="/runbooks/$runbookId" params={{ runbookId: "new" }}>
-                    <Button>Create Runbook</Button>
-                  </Link>
-                }
-              />
-            )
+            <EmptyState
+              title="No runbooks yet"
+              description="Create runbooks in BookOwl to see them here."
+            />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
-                  <TableHead>Category</TableHead>
                   <TableHead>Tags</TableHead>
-                  <TableHead>Template</TableHead>
                   <TableHead>Updated</TableHead>
                 </TableRow>
               </TableHeader>
@@ -90,20 +65,22 @@ export function RunbookListPage() {
                 {runbooks.map((runbook) => (
                   <TableRow key={runbook.id}>
                     <TableCell>
-                      <Link to="/runbooks/$runbookId" params={{ runbookId: runbook.id }} className="text-sm hover:text-accent transition-colors">
+                      <a
+                        href={runbook.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm hover:text-accent transition-colors"
+                      >
                         {runbook.title}
-                      </Link>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      </a>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{runbook.category || "—"}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {(runbook.tags ?? []).slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                         ))}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {runbook.is_template && <Badge variant="outline">Template</Badge>}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(runbook.updated_at)}</TableCell>
                   </TableRow>

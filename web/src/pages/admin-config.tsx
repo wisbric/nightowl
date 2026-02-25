@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import type { TenantConfigResponse, TestMessagingResponse } from "@/types/api";
+import type { TenantConfigResponse, TestMessagingResponse, TestBookOwlResponse } from "@/types/api";
 import { TIMEZONES } from "@/lib/timezones";
-import { Check, Wifi } from "lucide-react";
+import { Check, Wifi, BookOpen } from "lucide-react";
 
 interface ConfigForm {
   messaging_provider: string;
@@ -21,6 +21,8 @@ interface ConfigForm {
   twilio_sid: string;
   twilio_phone_number: string;
   default_timezone: string;
+  bookowl_api_url: string;
+  bookowl_api_key: string;
 }
 
 const emptyForm: ConfigForm = {
@@ -32,6 +34,8 @@ const emptyForm: ConfigForm = {
   twilio_sid: "",
   twilio_phone_number: "",
   default_timezone: "UTC",
+  bookowl_api_url: "",
+  bookowl_api_key: "",
 };
 
 export function AdminConfigPage() {
@@ -41,6 +45,7 @@ export function AdminConfigPage() {
   const [formOverride, setFormOverride] = useState<ConfigForm | null>(null);
   const [saved, setSaved] = useState(false);
   const [testResult, setTestResult] = useState<TestMessagingResponse | null>(null);
+  const [bookowlTestResult, setBookowlTestResult] = useState<TestBookOwlResponse | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-config"],
@@ -59,6 +64,8 @@ export function AdminConfigPage() {
       twilio_sid: data.twilio_sid || "",
       twilio_phone_number: data.twilio_phone_number || "",
       default_timezone: data.default_timezone || "UTC",
+      bookowl_api_url: data.bookowl_api_url || "",
+      bookowl_api_key: data.bookowl_api_key || "",
     };
   }, [data, formOverride]);
 
@@ -82,6 +89,19 @@ export function AdminConfigPage() {
     onSuccess: (data) => {
       setTestResult(data);
       setTimeout(() => setTestResult(null), 5000);
+    },
+  });
+
+  const bookowlTestMutation = useMutation({
+    mutationFn: (req: { url: string; api_key: string }) =>
+      api.post<TestBookOwlResponse>("/admin/config/bookowl/test", req),
+    onSuccess: (data) => {
+      setBookowlTestResult(data);
+      setTimeout(() => setBookowlTestResult(null), 5000);
+    },
+    onError: (err) => {
+      setBookowlTestResult({ ok: false, error: err instanceof Error ? err.message : "Connection test failed" });
+      setTimeout(() => setBookowlTestResult(null), 5000);
     },
   });
 
@@ -321,6 +341,76 @@ export function AdminConfigPage() {
                     Default timezone for schedules and reports
                   </p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* BookOwl Integration */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-accent" />
+                  <CardTitle>BookOwl Integration</CardTitle>
+                </div>
+                {form.bookowl_api_url && form.bookowl_api_key && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBookowlTestResult(null);
+                      bookowlTestMutation.mutate({ url: form.bookowl_api_url, api_key: form.bookowl_api_key });
+                    }}
+                    disabled={bookowlTestMutation.isPending}
+                  >
+                    <Wifi className="h-3 w-3 mr-1" />
+                    Test Connection
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoading ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="text-sm font-medium">BookOwl API URL</label>
+                      <Input
+                        value={form.bookowl_api_url}
+                        onChange={(e) => setForm({ ...form, bookowl_api_url: e.target.value })}
+                        placeholder="http://localhost:8081/api/v1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Base URL of the BookOwl API (e.g. http://localhost:8081/api/v1)
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">BookOwl API Key</label>
+                      <Input
+                        type="password"
+                        value={form.bookowl_api_key}
+                        onChange={(e) => setForm({ ...form, bookowl_api_key: e.target.value })}
+                        placeholder="bw_..."
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        API key with admin role for BookOwl
+                      </p>
+                    </div>
+                  </div>
+                  {bookowlTestResult && (
+                    <div className={`text-xs p-2 rounded ${bookowlTestResult.ok ? "bg-green-600/10 text-green-400" : "bg-destructive/10 text-destructive"}`}>
+                      {bookowlTestResult.ok
+                        ? `Connected to BookOwl (${bookowlTestResult.count} runbooks available)`
+                        : `Error: ${bookowlTestResult.error}`}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Connect to BookOwl to browse runbooks and create post-mortems from incidents.
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>
