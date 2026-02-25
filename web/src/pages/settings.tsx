@@ -22,13 +22,18 @@ export function SettingsPage() {
             </p>
           </div>
         </Link>
-        <div className="flex items-start gap-4 rounded-lg border border-dashed p-4 opacity-50">
+        <Link
+          to="/settings/preferences"
+          className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted"
+        >
           <Settings className="mt-0.5 h-5 w-5 text-muted-foreground" />
           <div>
             <p className="font-medium text-sm">Preferences</p>
-            <p className="text-xs text-muted-foreground">Coming soon.</p>
+            <p className="text-xs text-muted-foreground">
+              Timezone, theme, notifications, and dashboard settings.
+            </p>
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );

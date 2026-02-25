@@ -22,6 +22,7 @@ var ValidRoles = []string{RoleAdmin, RoleManager, RoleEngineer, RoleReadonly}
 // Method describes how the caller was authenticated.
 const (
 	MethodOIDC   = "oidc"
+	MethodLocal  = "local"
 	MethodAPIKey = "apikey"
 	MethodDev    = "dev"
 )

@@ -7,7 +7,6 @@ sql:
       - "sqlc/queries/services/"
       - "sqlc/queries/alerts/"
       - "sqlc/queries/incidents/"
-      - "sqlc/queries/runbooks/"
       - "sqlc/queries/rosters/"
       - "sqlc/queries/escalation/"
       - "sqlc/queries/audit/"

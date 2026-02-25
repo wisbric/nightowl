@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Settings, Key, Users, FileText } from "lucide-react";
+import { Settings, Key, Users, FileText, Shield } from "lucide-react";
 
 export function AdminPage() {
   useTitle("Admin");
@@ -46,6 +46,17 @@ export function AdminPage() {
               <div>
                 <p className="font-medium">Configuration</p>
                 <p className="text-xs text-muted-foreground">Tenant settings</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/admin/auth">
+          <Card className="cursor-pointer hover:border-accent transition-colors">
+            <CardContent className="flex items-center gap-3 p-4">
+              <Shield className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Authentication</p>
+                <p className="text-xs text-muted-foreground">OIDC & local admin</p>
               </div>
             </CardContent>
           </Card>

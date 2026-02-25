@@ -15,8 +15,11 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Incident, IncidentHistoryEntry, RunbooksResponse } from "@/types/api";
-import { BookOpen } from "lucide-react";
+import type {
+  Incident, IncidentHistoryEntry,
+  BookOwlStatusResponse, BookOwlRunbookListResponse, BookOwlPostMortemResponse,
+} from "@/types/api";
+import { BookOpen, ExternalLink, FileText } from "lucide-react";
 
 interface IncidentForm {
   title: string;
@@ -38,6 +41,7 @@ export function IncidentDetailPage() {
   const [editing, setEditing] = useState(isNew);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
+  const [postMortemResult, setPostMortemResult] = useState<BookOwlPostMortemResponse | null>(null);
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ["incident", incidentId],
@@ -51,11 +55,19 @@ export function IncidentDetailPage() {
     enabled: !isNew,
   });
 
-  const { data: runbooksData } = useQuery({
-    queryKey: ["runbooks-all"],
-    queryFn: () => api.get<RunbooksResponse>("/runbooks?limit=200"),
+  // BookOwl integration status
+  const { data: bookowlStatus } = useQuery({
+    queryKey: ["bookowl-status"],
+    queryFn: () => api.get<BookOwlStatusResponse>("/bookowl/status"),
   });
-  const runbooks = runbooksData?.items ?? [];
+  const bookowlIntegrated = bookowlStatus?.integrated ?? false;
+
+  // Fetch runbooks: BookOwl if integrated, otherwise local
+  const { data: bookowlRunbooks } = useQuery({
+    queryKey: ["bookowl-runbooks"],
+    queryFn: () => api.get<BookOwlRunbookListResponse>("/bookowl/runbooks?limit=200"),
+    enabled: bookowlIntegrated,
+  });
 
   useTitle(isNew ? "New Incident" : incident?.title ?? "Incident");
 
@@ -110,18 +122,47 @@ export function IncidentDetailPage() {
     },
   });
 
+  const postMortemMutation = useMutation({
+    mutationFn: () =>
+      api.post<BookOwlPostMortemResponse>("/bookowl/post-mortems", {
+        title: `Post-Mortem: ${incident!.title}`,
+        space_slug: "post-mortems",
+        incident: {
+          id: incident!.id,
+          title: incident!.title,
+          severity: incident!.severity,
+          root_cause: incident!.root_cause ?? "",
+          solution: incident!.solution ?? "",
+          created_at: incident!.created_at,
+          resolved_at: incident!.updated_at,
+          resolved_by: "",
+        },
+      }),
+    onSuccess: (data) => {
+      setPostMortemResult(data);
+    },
+  });
+
   function handleMergeSubmit() {
     const trimmed = targetId.trim();
     if (!trimmed) return;
     mergeMutation.mutate(trimmed);
   }
 
+  // Build runbook options for the dropdown
+  const runbookOptions = bookowlIntegrated
+    ? (bookowlRunbooks?.items ?? []).map((rb) => ({ id: rb.id, title: rb.title }))
+    : [];
+
+  // Can create post-mortem when BookOwl is integrated and incident has root_cause/solution
+  const canCreatePostMortem = bookowlIntegrated && incident && (incident.root_cause || incident.solution);
+
   if (!isNew && isLoading) return <LoadingSpinner size="lg" />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/incidents" className="text-muted-foreground hover:text-foreground text-sm">&larr; Knowledge Base</Link>
+        <Link to="/incidents" className="text-muted-foreground hover:text-foreground text-sm">&larr; Incidents</Link>
       </div>
 
       {editing ? (
@@ -166,9 +207,9 @@ export function IncidentDetailPage() {
                 <label className="text-sm font-medium">Linked Runbook (optional)</label>
                 <Select {...register("runbook_id")}>
                   <option value="">No runbook</option>
-                  {runbooks.map((rb) => (
+                  {runbookOptions.map((rb) => (
                     <option key={rb.id} value={rb.id}>
-                      {rb.title}{rb.category ? ` (${rb.category})` : ""}
+                      {rb.title}
                     </option>
                   ))}
                 </Select>
@@ -212,10 +253,34 @@ export function IncidentDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              {canCreatePostMortem && !postMortemResult && (
+                <Button
+                  variant="outline"
+                  onClick={() => postMortemMutation.mutate()}
+                  disabled={postMortemMutation.isPending}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1" />
+                  {postMortemMutation.isPending ? "Creating..." : "Create Post-Mortem"}
+                </Button>
+              )}
+              {postMortemResult && (
+                <a href={postMortemResult.url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    View Post-Mortem
+                  </Button>
+                </a>
+              )}
               <Button variant="outline" onClick={() => setMergeOpen(true)}>Merge</Button>
               <Button onClick={() => setEditing(true)}>Edit</Button>
             </div>
           </div>
+
+          {postMortemMutation.isError && (
+            <div className="text-xs p-2 rounded bg-destructive/10 text-destructive">
+              Failed to create post-mortem: {postMortemMutation.error instanceof Error ? postMortemMutation.error.message : "unknown error"}
+            </div>
+          )}
 
           <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)}>
             <DialogHeader>
@@ -255,17 +320,17 @@ export function IncidentDetailPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Symptoms</CardTitle></CardHeader>
-              <CardContent><p className="text-sm whitespace-pre-wrap">{incident.symptoms || "—"}</p></CardContent>
+              <CardContent><p className="text-sm whitespace-pre-wrap">{incident.symptoms || "\u2014"}</p></CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Root Cause</CardTitle></CardHeader>
-              <CardContent><p className="text-sm whitespace-pre-wrap">{incident.root_cause || "—"}</p></CardContent>
+              <CardContent><p className="text-sm whitespace-pre-wrap">{incident.root_cause || "\u2014"}</p></CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader><CardTitle>Solution</CardTitle></CardHeader>
-            <CardContent><p className="text-sm whitespace-pre-wrap">{incident.solution || "—"}</p></CardContent>
+            <CardContent><p className="text-sm whitespace-pre-wrap">{incident.solution || "\u2014"}</p></CardContent>
           </Card>
 
           {incident.runbook_id && incident.runbook_title && (
@@ -274,9 +339,13 @@ export function IncidentDetailPage() {
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-accent" />
                   <CardTitle>
-                    <Link to="/runbooks/$runbookId" params={{ runbookId: incident.runbook_id }} className="hover:text-accent transition-colors">
-                      {incident.runbook_title}
-                    </Link>
+                    {bookowlIntegrated ? (
+                      <Link to="/runbooks/$runbookId" params={{ runbookId: incident.runbook_id }} className="hover:text-accent transition-colors">
+                        {incident.runbook_title}
+                      </Link>
+                    ) : (
+                      <span>{incident.runbook_title}</span>
+                    )}
                   </CardTitle>
                   <Badge variant="outline" className="text-xs">Runbook</Badge>
                 </div>
@@ -339,10 +408,10 @@ export function IncidentDetailPage() {
                       <TableRow key={entry.id}>
                         <TableCell className="font-medium text-sm">{entry.field}</TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                          {entry.old_value || "—"}
+                          {entry.old_value || "\u2014"}
                         </TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">
-                          {entry.new_value || "—"}
+                          {entry.new_value || "\u2014"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{entry.changed_by}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">

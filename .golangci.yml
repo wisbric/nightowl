@@ -1,12 +1,13 @@
+version: "2"
+
 run:
   timeout: 5m
-  go: "1.23"
+  go: "1.25"
 
 linters:
   enable:
     - errcheck
     - errorlint
-    - goimports
     - govet
     - ineffassign
     - staticcheck
@@ -14,9 +15,15 @@ linters:
     - bodyclose
     - noctx
 
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/wisbric/nightowl
+
 linters-settings:
-  goimports:
-    local-prefixes: github.com/wisbric/nightowl
   errorlint:
     errorf: true
     asserts: true

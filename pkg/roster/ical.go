@@ -13,7 +13,7 @@ func generateICSFromSchedule(roster RosterResponse, schedule []ScheduleEntry, ov
 	b.WriteString("BEGIN:VCALENDAR\r\n")
 	b.WriteString("VERSION:2.0\r\n")
 	b.WriteString("PRODID:-//NightOwl//Roster//EN\r\n")
-	b.WriteString(fmt.Sprintf("X-WR-CALNAME:%s On-Call\r\n", roster.Name))
+	fmt.Fprintf(&b, "X-WR-CALNAME:%s On-Call\r\n", roster.Name)
 	b.WriteString("CALSCALE:GREGORIAN\r\n")
 	b.WriteString("METHOD:PUBLISH\r\n")
 
@@ -49,10 +49,10 @@ func generateICSFromSchedule(roster RosterResponse, schedule []ScheduleEntry, ov
 
 		uid := fmt.Sprintf("%s-%s@nightowl", roster.ID, entry.WeekStart)
 		b.WriteString("BEGIN:VEVENT\r\n")
-		b.WriteString(fmt.Sprintf("UID:%s\r\n", uid))
-		b.WriteString(fmt.Sprintf("DTSTART:%s\r\n", shiftStart.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("DTEND:%s\r\n", shiftEnd.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("SUMMARY:On-Call: %s\r\n", primaryName))
+		fmt.Fprintf(&b, "UID:%s\r\n", uid)
+		fmt.Fprintf(&b, "DTSTART:%s\r\n", shiftStart.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "DTEND:%s\r\n", shiftEnd.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "SUMMARY:On-Call: %s\r\n", primaryName)
 
 		desc := fmt.Sprintf("Roster: %s\\nPrimary: %s", roster.Name, primaryName)
 		if entry.SecondaryDisplayName != "" {
@@ -61,7 +61,7 @@ func generateICSFromSchedule(roster RosterResponse, schedule []ScheduleEntry, ov
 		if entry.Notes != nil && *entry.Notes != "" {
 			desc += fmt.Sprintf("\\nNotes: %s", *entry.Notes)
 		}
-		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", desc))
+		fmt.Fprintf(&b, "DESCRIPTION:%s\r\n", desc)
 		b.WriteString("END:VEVENT\r\n")
 	}
 
@@ -69,15 +69,15 @@ func generateICSFromSchedule(roster RosterResponse, schedule []ScheduleEntry, ov
 	for _, o := range overrides {
 		uid := fmt.Sprintf("override-%s@nightowl", o.ID)
 		b.WriteString("BEGIN:VEVENT\r\n")
-		b.WriteString(fmt.Sprintf("UID:%s\r\n", uid))
-		b.WriteString(fmt.Sprintf("DTSTART:%s\r\n", o.StartAt.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("DTEND:%s\r\n", o.EndAt.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("SUMMARY:Override: %s\r\n", o.DisplayName))
+		fmt.Fprintf(&b, "UID:%s\r\n", uid)
+		fmt.Fprintf(&b, "DTSTART:%s\r\n", o.StartAt.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "DTEND:%s\r\n", o.EndAt.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "SUMMARY:Override: %s\r\n", o.DisplayName)
 		reason := ""
 		if o.Reason != nil {
 			reason = *o.Reason
 		}
-		b.WriteString(fmt.Sprintf("DESCRIPTION:Override on %s\\nReason: %s\r\n", roster.Name, reason))
+		fmt.Fprintf(&b, "DESCRIPTION:Override on %s\\nReason: %s\r\n", roster.Name, reason)
 		b.WriteString("END:VEVENT\r\n")
 	}
 

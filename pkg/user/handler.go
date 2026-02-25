@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/auth"
 	"github.com/wisbric/nightowl/internal/httpserver"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
@@ -159,4 +161,67 @@ func (h *Handler) handleDeactivate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpserver.Respond(w, http.StatusNoContent, nil)
+}
+
+// PreferencesRoutes returns a chi.Router for /user/preferences endpoints.
+func (h *Handler) PreferencesRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", h.handleGetPreferences)
+	r.Put("/", h.handleUpdatePreferences)
+	return r
+}
+
+func (h *Handler) handleGetPreferences(w http.ResponseWriter, r *http.Request) {
+	id := auth.FromContext(r.Context())
+	if id == nil || id.UserID == nil {
+		httpserver.RespondError(w, http.StatusUnauthorized, "unauthorized", "user authentication required")
+		return
+	}
+
+	conn := tenant.ConnFromContext(r.Context())
+	store := NewPreferencesStore(conn)
+
+	prefs, err := store.GetPreferences(r.Context(), *id.UserID)
+	if err != nil {
+		h.logger.Error("getting preferences", "error", err, "user_id", id.UserID)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to get preferences")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(prefs) //nolint:errcheck
+}
+
+func (h *Handler) handleUpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	id := auth.FromContext(r.Context())
+	if id == nil || id.UserID == nil {
+		httpserver.RespondError(w, http.StatusUnauthorized, "unauthorized", "user authentication required")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "failed to read body")
+		return
+	}
+
+	// Validate it's valid JSON.
+	if !json.Valid(body) {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid JSON")
+		return
+	}
+
+	conn := tenant.ConnFromContext(r.Context())
+	store := NewPreferencesStore(conn)
+
+	if err := store.UpdatePreferences(r.Context(), *id.UserID, body); err != nil {
+		h.logger.Error("updating preferences", "error", err, "user_id", id.UserID)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to update preferences")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body) //nolint:errcheck
 }

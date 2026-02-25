@@ -19,3 +19,14 @@ CREATE TABLE public.api_keys (
     expires_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE public.local_admins (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL UNIQUE REFERENCES public.tenants(id) ON DELETE CASCADE,
+    username        TEXT NOT NULL DEFAULT 'admin',
+    password_hash   TEXT NOT NULL,
+    must_change     BOOLEAN NOT NULL DEFAULT true,
+    last_login_at   TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
