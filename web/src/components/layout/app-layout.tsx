@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect } from "react";
+import { type ReactNode, useState, useRef } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { Sidebar } from "./sidebar";
 
@@ -19,11 +19,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isDetailPage = DETAIL_PATTERNS.some((p) => p.test(pathname));
   const [manualCollapse, setManualCollapse] = useState<boolean | null>(null);
+  const prevIsDetailPage = useRef(isDetailPage);
 
   // Reset manual override when route changes between detail/non-detail.
-  useEffect(() => {
+  if (prevIsDetailPage.current !== isDetailPage) {
+    prevIsDetailPage.current = isDetailPage;
     setManualCollapse(null);
-  }, [isDetailPage]);
+  }
 
   const collapsed = manualCollapse ?? isDetailPage;
 

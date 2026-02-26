@@ -39,19 +39,12 @@ export function SettingsPreferencesPage() {
 
   useEffect(() => {
     if (prefs) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimezone(prefs.timezone || "");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(prefs.theme || "system");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifCritical(prefs.notifications?.critical ?? true);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifMajor(prefs.notifications?.major ?? true);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifWarning(prefs.notifications?.warning ?? false);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifInfo(prefs.notifications?.info ?? false);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRange(prefs.dashboard?.default_time_range || "24h");
     }
   }, [prefs]);
