@@ -9,39 +9,32 @@ interface UserInfo {
 }
 
 interface AuthState {
-  token: string | null;
   user: UserInfo | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
 interface AuthContextValue extends AuthState {
-  login: (token: string, user: UserInfo) => void;
+  login: (user: UserInfo) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = "nightowl_token";
-
 function getInitialState(): AuthState {
   // In dev mode, start authenticated immediately (API client uses dev API key).
   if (import.meta.env.DEV) {
     return {
-      token: null,
       user: { id: "dev", email: "dev@localhost", display_name: "Dev User", role: "admin" },
       isAuthenticated: true,
       isLoading: true, // still loading real user data
     };
   }
 
-  // In prod, check for a stored token synchronously to avoid flash.
-  const stored = localStorage.getItem(TOKEN_KEY);
   return {
-    token: stored,
     user: null,
     isAuthenticated: false,
-    isLoading: !!stored, // only loading if we need to validate a token
+    isLoading: true, // check cookie-based session on mount
   };
 }
 
@@ -67,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const admin = data?.users?.find((u: { role: string }) => u.role === "admin");
           if (admin) {
             setState({
-              token: null,
               user: { id: admin.id, email: admin.email, display_name: admin.display_name, role: admin.role },
               isAuthenticated: true,
               isLoading: false,
@@ -82,43 +74,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Prod: validate the stored token with the backend.
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (!stored) return; // isLoading is already false from getInitialState
-
-    fetch("/auth/me", {
-      headers: { Authorization: `Bearer ${stored}` },
-    })
+    // Prod: validate session cookie by calling /auth/me (cookie sent automatically).
+    fetch("/auth/me", { credentials: "same-origin" })
       .then((res) => {
-        if (!res.ok) throw new Error("invalid token");
+        if (!res.ok) throw new Error("no session");
         return res.json();
       })
       .then((user: UserInfo) => {
-        setState({ token: stored, user, isAuthenticated: true, isLoading: false });
+        setState({ user, isAuthenticated: true, isLoading: false });
       })
       .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        setState({ token: null, user: null, isAuthenticated: false, isLoading: false });
+        setState({ user: null, isAuthenticated: false, isLoading: false });
       });
   }, []);
 
-  const login = useCallback((token: string, user: UserInfo) => {
-    localStorage.setItem(TOKEN_KEY, token);
-    setState({ token, user, isAuthenticated: true, isLoading: false });
+  const login = useCallback((user: UserInfo) => {
+    setState({ user, isAuthenticated: true, isLoading: false });
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    const currentToken = state.token;
-    setState({ token: null, user: null, isAuthenticated: false, isLoading: false });
-    // POST to logout endpoint (fire-and-forget).
-    if (currentToken) {
-      fetch("/auth/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${currentToken}` },
-      }).catch(() => {});
-    }
-  }, [state.token]);
+    setState({ user: null, isAuthenticated: false, isLoading: false });
+    // POST to logout endpoint to clear server-side cookie.
+    fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    }).catch(() => {});
+  }, []);
 
   return (
     <AuthContext.Provider value={{ ...state, login, logout }}>

@@ -13,8 +13,8 @@ import (
 	goslack "github.com/slack-go/slack"
 
 	"github.com/wisbric/nightowl/internal/audit"
-	"github.com/wisbric/nightowl/internal/auth"
-	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/core/pkg/auth"
+	"github.com/wisbric/core/pkg/httpserver"
 	nightowlmm "github.com/wisbric/nightowl/pkg/mattermost"
 )
 

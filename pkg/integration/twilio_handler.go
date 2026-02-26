@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/core/pkg/httpserver"
 )
 
 // TwilioHandler provides HTTP handlers for Twilio inbound webhooks.

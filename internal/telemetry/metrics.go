@@ -1,23 +1,7 @@
 package telemetry
 
-import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-)
+import "github.com/prometheus/client_golang/prometheus"
 
-// HTTPRequestDuration tracks HTTP request latency.
-var HTTPRequestDuration = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "nightowl",
-		Subsystem: "api",
-		Name:      "request_duration_seconds",
-		Help:      "HTTP request duration in seconds.",
-		Buckets:   prometheus.DefBuckets,
-	},
-	[]string{"method", "path", "status"},
-)
-
-// AlertsDeduplicatedTotal counts the number of deduplicated alerts.
 var AlertsDeduplicatedTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -27,7 +11,6 @@ var AlertsDeduplicatedTotal = prometheus.NewCounter(
 	},
 )
 
-// AlertsAgentResolvedTotal counts alerts auto-resolved by agents.
 var AlertsAgentResolvedTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -37,7 +20,6 @@ var AlertsAgentResolvedTotal = prometheus.NewCounter(
 	},
 )
 
-// AlertsReceivedTotal counts received alerts by source and severity.
 var AlertsReceivedTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -48,7 +30,6 @@ var AlertsReceivedTotal = prometheus.NewCounterVec(
 	[]string{"source", "severity"},
 )
 
-// AlertProcessingDuration tracks webhook alert processing latency by source.
 var AlertProcessingDuration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Namespace: "nightowl",
@@ -60,7 +41,6 @@ var AlertProcessingDuration = prometheus.NewHistogramVec(
 	[]string{"source"},
 )
 
-// KBHitsTotal counts successful knowledge base enrichment matches.
 var KBHitsTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -69,7 +49,6 @@ var KBHitsTotal = prometheus.NewCounter(
 	},
 )
 
-// SlackNotificationsTotal counts Slack notifications sent by type.
 var SlackNotificationsTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -80,7 +59,6 @@ var SlackNotificationsTotal = prometheus.NewCounterVec(
 	[]string{"type"},
 )
 
-// AlertsEscalatedTotal counts alerts escalated per tier.
 var AlertsEscalatedTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Namespace: "nightowl",
@@ -91,20 +69,15 @@ var AlertsEscalatedTotal = prometheus.NewCounterVec(
 	[]string{"tier"},
 )
 
-// NewMetricsRegistry creates a Prometheus registry with default and custom collectors.
-func NewMetricsRegistry() *prometheus.Registry {
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(
-		collectors.NewGoCollector(),
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		HTTPRequestDuration,
+// All returns all NightOwl-specific metrics for registration.
+func All() []prometheus.Collector {
+	return []prometheus.Collector{
 		AlertsDeduplicatedTotal,
 		AlertsAgentResolvedTotal,
 		AlertsReceivedTotal,
 		AlertProcessingDuration,
 		KBHitsTotal,
-		AlertsEscalatedTotal,
 		SlackNotificationsTotal,
-	)
-	return reg
+		AlertsEscalatedTotal,
+	}
 }

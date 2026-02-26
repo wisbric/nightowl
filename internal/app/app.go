@@ -16,13 +16,14 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/wisbric/nightowl/internal/audit"
-	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/core/pkg/auth"
 	"github.com/wisbric/nightowl/internal/config"
-	"github.com/wisbric/nightowl/internal/httpserver"
-	"github.com/wisbric/nightowl/internal/platform"
+	"github.com/wisbric/core/pkg/httpserver"
+	"github.com/wisbric/core/pkg/platform"
 	"github.com/wisbric/nightowl/internal/seed"
-	"github.com/wisbric/nightowl/internal/telemetry"
-	"github.com/wisbric/nightowl/internal/version"
+	coretelemetry "github.com/wisbric/core/pkg/telemetry"
+	nightowlmetrics "github.com/wisbric/nightowl/internal/telemetry"
+	"github.com/wisbric/core/pkg/version"
 	"github.com/wisbric/nightowl/pkg/alert"
 	"github.com/wisbric/nightowl/pkg/apikey"
 	"github.com/wisbric/nightowl/pkg/bookowl"
@@ -34,6 +35,7 @@ import (
 	"github.com/wisbric/nightowl/pkg/pat"
 	"github.com/wisbric/nightowl/pkg/roster"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
+	"github.com/wisbric/nightowl/internal/authadapter"
 	"github.com/wisbric/nightowl/pkg/tenantconfig"
 	"github.com/wisbric/nightowl/pkg/user"
 )
@@ -41,7 +43,7 @@ import (
 // Run is the main application entry point. It reads config, connects to
 // infrastructure, and starts the appropriate mode (api or worker).
 func Run(ctx context.Context, cfg *config.Config) error {
-	logger := telemetry.NewLogger(cfg.LogFormat, cfg.LogLevel)
+	logger := coretelemetry.NewLogger(cfg.LogFormat, cfg.LogLevel)
 	slog.SetDefault(logger)
 
 	logger.Info("starting nightowl",
@@ -50,7 +52,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	)
 
 	// Tracing
-	shutdownTracer, err := telemetry.InitTracer(ctx, cfg.OTLPEndpoint, "nightowl", version.Version)
+	shutdownTracer, err := coretelemetry.InitTracer(ctx, cfg.OTLPEndpoint, "nightowl", version.Version)
 	if err != nil {
 		return fmt.Errorf("initializing tracer: %w", err)
 	}
@@ -87,7 +89,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	logger.Info("global migrations applied")
 
 	// Metrics
-	metricsReg := telemetry.NewMetricsRegistry()
+	metricsReg := coretelemetry.NewMetricsRegistry(nightowlmetrics.All()...)
 
 	switch cfg.Mode {
 	case "api":
@@ -132,15 +134,20 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		logger.Info("OIDC authentication disabled (OIDC_ISSUER_URL not set)")
 	}
 
+	// Auth storage adapter.
+	authStore := authadapter.New(db)
+
 	// PAT authenticator.
-	patAuth := auth.NewPATAuthenticator(db)
+	patAuth := auth.NewPATAuthenticator(authStore)
 
 	// Audit log writer (async, buffered).
 	auditWriter := audit.NewWriter(db, logger)
 	auditWriter.Start(ctx)
 	defer auditWriter.Close()
 
-	srv := httpserver.NewServer(cfg, logger, db, rdb, metricsReg, sessionMgr, oidcAuth, patAuth)
+	srv := httpserver.NewServer(httpserver.ServerConfig{
+		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
+	}, logger, db, rdb, metricsReg, sessionMgr, oidcAuth, patAuth, authStore)
 
 	// --- Auth routes (public, pre-authentication) ---
 
@@ -148,13 +155,13 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	rateLimiter := auth.NewRateLimiter(rdb, 10, 15*time.Minute)
 
 	// Local admin login and change-password.
-	localAdminHandler := auth.NewLocalAdminHandler(sessionMgr, db, logger, rateLimiter)
+	localAdminHandler := auth.NewLocalAdminHandler(sessionMgr, authStore, logger, rateLimiter)
 	srv.Router.Post("/auth/local", localAdminHandler.HandleLocalLogin)
 	srv.Router.Post("/auth/change-password", localAdminHandler.HandleChangePassword)
 	srv.Router.Get("/auth/config", localAdminHandler.HandleAuthConfig)
 
 	// Existing email/password login (for tenant users, not local admins).
-	loginHandler := auth.NewLoginHandler(sessionMgr, db, logger, oidcAuth != nil)
+	loginHandler := auth.NewLoginHandler(sessionMgr, authStore, logger, oidcAuth != nil)
 	srv.Router.Post("/auth/login", loginHandler.HandleLogin)
 	srv.Router.Get("/auth/me", loginHandler.HandleMe)
 	srv.Router.Post("/auth/logout", loginHandler.HandleLogout)
@@ -174,13 +181,16 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 			TokenURL: cfg.OIDCIssuerURL + "/oauth/token",
 		}
 
-		oidcFlow := auth.NewOIDCFlowHandler(oauth2Cfg, oidcAuth, sessionMgr, db, rdb, logger)
+		oidcFlow := auth.NewOIDCFlowHandler(oauth2Cfg, oidcAuth, sessionMgr, authStore, rdb, logger)
 		srv.Router.Get("/auth/oidc/login", oidcFlow.HandleLogin)
 		srv.Router.Get("/auth/oidc/callback", oidcFlow.HandleCallback)
 		logger.Info("OIDC Authorization Code flow enabled", "redirect_url", cfg.OIDCRedirectURL)
 	}
 
-	// System status endpoint.
+	// Public status endpoint (no auth required — used by about page).
+	srv.Router.Get("/status", srv.HandleStatus)
+
+	// Authenticated status endpoint (backward compat).
 	srv.APIRouter.Get("/status", srv.HandleStatus)
 
 	// Mount domain handlers.
@@ -190,13 +200,13 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	alertHandler := alert.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/alerts", alertHandler.Routes())
 
-	dedup := alert.NewDeduplicator(rdb, logger, telemetry.AlertsDeduplicatedTotal)
+	dedup := alert.NewDeduplicator(rdb, logger, nightowlmetrics.AlertsDeduplicatedTotal)
 	enricher := alert.NewEnricher(logger)
 	webhookMetrics := &alert.WebhookMetrics{
-		ReceivedTotal:      telemetry.AlertsReceivedTotal,
-		ProcessingDuration: telemetry.AlertProcessingDuration,
-		KBHitsTotal:        telemetry.KBHitsTotal,
-		AgentResolvedTotal: telemetry.AlertsAgentResolvedTotal,
+		ReceivedTotal:      nightowlmetrics.AlertsReceivedTotal,
+		ProcessingDuration: nightowlmetrics.AlertProcessingDuration,
+		KBHitsTotal:        nightowlmetrics.KBHitsTotal,
+		AgentResolvedTotal: nightowlmetrics.AlertsAgentResolvedTotal,
 	}
 	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics)
 	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
@@ -230,7 +240,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	srv.APIRouter.Mount("/admin/config", tenantConfigHandler.Routes())
 
 	// OIDC admin config endpoints (admin role required).
-	oidcAdminHandler := auth.NewOIDCAdminHandler(db, logger, sessionSecret)
+	oidcAdminHandler := auth.NewOIDCAdminHandler(authStore, logger, sessionSecret)
 	srv.APIRouter.Route("/admin/oidc", func(r chi.Router) {
 		r.Use(auth.RequireRole(auth.RoleAdmin))
 		r.Get("/config", oidcAdminHandler.HandleGetOIDCConfig)
@@ -308,6 +318,6 @@ func runWorker(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, rdb
 	// Schedule top-up: runs once at start, then every 6 hours.
 	go roster.RunScheduleTopUpLoop(ctx, pool, logger, 6*time.Hour)
 
-	engine := escalation.NewEngine(pool, rdb, logger, telemetry.AlertsEscalatedTotal)
+	engine := escalation.NewEngine(pool, rdb, logger, nightowlmetrics.AlertsEscalatedTotal)
 	return engine.Run(ctx)
 }

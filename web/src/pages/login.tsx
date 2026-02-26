@@ -57,6 +57,7 @@ export function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
+        credentials: "same-origin",
       });
 
       if (res.status === 429) {
@@ -74,13 +75,14 @@ export function LoginPage() {
       const data = await res.json();
 
       if (data.must_change) {
-        // Store the token and redirect to change-password page.
-        login(data.token, data.user);
+        // Cookie is set by the server; redirect to change-password page.
+        login(data.user);
         navigate({ to: "/change-password" });
         return;
       }
 
-      login(data.token, data.user);
+      // Cookie is set by the server; update frontend auth state.
+      login(data.user);
       navigate({ to: "/" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -99,6 +101,7 @@ export function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: emailPassword }),
+        credentials: "same-origin",
       });
 
       if (!res.ok) {
@@ -107,7 +110,8 @@ export function LoginPage() {
       }
 
       const data = await res.json();
-      login(data.token, data.user);
+      // Cookie is set by the server; update frontend auth state.
+      login(data.user);
       navigate({ to: "/" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

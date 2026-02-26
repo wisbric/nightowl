@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/core/pkg/auth"
 	"github.com/wisbric/nightowl/internal/db"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )

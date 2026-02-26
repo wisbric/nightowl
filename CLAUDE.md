@@ -33,7 +33,7 @@ The product is called **NightOwl**. The frontend follows the design system in `d
 - **Database:** PostgreSQL 16+ via jackc/pgx/v5 + sqlc
 - **Migrations:** golang-migrate (SQL files in `migrations/`)
 - **Cache:** Redis 7 via redis/go-redis/v9
-- **Auth:** OIDC (coreos/go-oidc/v3) + API keys (SHA-256)
+- **Auth:** Cookie sessions (`wisbric_session`) + OIDC (coreos/go-oidc/v3) + API keys (SHA-256) — auth logic lives in `core/pkg/auth`
 - **Slack:** slack-go/slack
 - **Telephony:** twilio/twilio-go
 - **Metrics:** prometheus/client_golang (namespace: `nightowl`)
@@ -60,7 +60,17 @@ The product is called **NightOwl**. The frontend follows the design system in `d
 
 ## Multi-Tenancy
 
-Schema-per-tenant isolation. Every request must resolve a tenant (from JWT, API key, or dev header). The middleware acquires a pooled connection and sets `search_path` before any query executes. Never reference tenant data without going through the tenant middleware.
+Schema-per-tenant isolation. Every request must resolve a tenant (from session cookie, JWT, API key, or dev header). The middleware acquires a pooled connection and sets `search_path` before any query executes. Never reference tenant data without going through the tenant middleware.
+
+## Authentication
+
+Auth is handled by the shared `core/pkg/auth` package. Middleware precedence: Cookie → PAT → Session JWT (Bearer) → OIDC JWT (Bearer) → API Key → Dev header.
+
+- **Cookie sessions:** `wisbric_session` HttpOnly cookie set on login, validated by `core/pkg/auth/session.go`
+- **Local admin:** Break-glass login at `POST /auth/local`, forced password change on first login
+- **OIDC:** Optional, via Keycloak/Dex/Auth0 — set `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID`
+- **API keys:** `X-API-Key` header for service-to-service calls
+- **Storage adapter:** `internal/authadapter/` implements `core/pkg/auth.Storage` for NightOwl's DB schema
 
 ## Development
 
@@ -71,7 +81,9 @@ go run ./cmd/nightowl         # API on :8080
 cd web && npm run dev         # Frontend on :3000 (proxies /api to :8080)
 ```
 
-- Dev API key: `ow_dev_seed_key_do_not_use_in_production` (auto-used by frontend)
+- Dev API key: `ow_dev_seed_key_do_not_use_in_production`
+- Local admin: username `admin`, password `nightowl-admin` (dev mode only; forced password change on first login)
+- Login URL: `http://localhost:3000/login`
 - Env vars prefix: `NIGHTOWL_` (e.g., `NIGHTOWL_MODE`, `NIGHTOWL_HOST`, `NIGHTOWL_PORT`)
 - DB credentials (dev): `nightowl:nightowl@localhost:5432/nightowl`
 - Docker image: `nightowl:dev` (via `make docker`)

@@ -148,9 +148,9 @@ pkg/
 
 internal/
 ├── app/             # Application orchestrator (modes: api, worker, seed, seed-demo)
-├── auth/            # OIDC + API key + RBAC middleware
+├── authadapter/     # Auth storage adapter (implements core/pkg/auth.Storage)
 ├── audit/           # Async buffered audit log writer + list handler
-├── config/          # Env-based config (caarlos0/env)
+├── config/          # Env-based config (extends core/pkg/config.BaseConfig)
 ├── db/              # sqlc-generated models and queries
 ├── docs/            # OpenAPI/Swagger UI handler
 ├── httpserver/      # Chi server, middleware, response helpers, pagination
@@ -241,14 +241,20 @@ Alert resolved (by human or agent)
 
 ### 5.1 Authentication Methods
 
+All auth logic lives in the shared `core/pkg/auth` package, used by NightOwl, BookOwl, and TicketOwl.
+
 | Method | Use Case |
 |--------|----------|
-| OIDC/OAuth2 (JWT) | Web UI users, SSO via Keycloak/Dex |
-| API Key (header: `X-API-Key`) | Webhook senders, agent integrations, frontend dev mode |
+| Cookie session (`wisbric_session`) | Browser clients. HttpOnly, Secure, SameSite=Strict cookie set on login. Silent refresh when <2h remaining. |
+| OIDC/OAuth2 (JWT) | Web UI users, SSO via Keycloak/Dex. Cookie set after OIDC callback. |
+| Local admin (`POST /auth/local`) | Break-glass access when OIDC is unavailable. Username/password, forced change on first login. |
+| API Key (header: `X-API-Key`) | Webhook senders, agent integrations, service-to-service |
 | Slack signing secret | Slack bot event verification |
 | Dev header (`X-Tenant-Slug`) | Development fallback (no real auth, grants admin) |
 
-**Authentication precedence:** JWT → API Key → Dev header (dev only)
+**Authentication precedence:** Cookie → PAT → Session JWT (Bearer) → OIDC JWT (Bearer) → API Key → Dev header (dev only)
+
+The `internal/authadapter/` package implements `core/pkg/auth.Storage` for NightOwl's database schema. Login endpoints (`/auth/local`, `/auth/login`, `/auth/me`, `/auth/logout`) are mounted directly on the chi router (not behind auth middleware).
 
 ### 5.2 RBAC Model
 

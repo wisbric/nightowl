@@ -1,36 +1,28 @@
 import { useEffect } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/contexts/auth-context";
 
 export function AuthCallbackPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as Record<string, string>;
 
   useEffect(() => {
-    const token = search.token;
-    if (!token) {
-      navigate({ to: "/login" });
-      return;
-    }
-
-    // Validate the token and get user info.
-    fetch("/auth/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // After OIDC callback, the session cookie is already set by the server.
+    // Validate it by calling /auth/me, then redirect to /.
+    fetch("/auth/me", { credentials: "same-origin" })
       .then((res) => {
-        if (!res.ok) throw new Error("invalid token");
+        if (!res.ok) throw new Error("no session");
         return res.json();
       })
       .then((user) => {
-        login(token, user);
+        login(user);
         navigate({ to: "/" });
       })
       .catch(() => {
         navigate({ to: "/login" });
       });
-  }, [search.token, login, navigate]);
+  }, [login, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

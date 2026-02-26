@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/nightowl/internal/auth"
+	"github.com/wisbric/core/pkg/auth"
 	"github.com/wisbric/nightowl/internal/db"
 	"github.com/wisbric/nightowl/pkg/roster"
 	"github.com/wisbric/nightowl/pkg/tenant"
@@ -650,6 +650,11 @@ Longhorn's over-provisioning percentage is set to 100% (default), meaning it won
 		Scopes:      []string{"*"},
 	}); err != nil {
 		return fmt.Errorf("creating seed API key: %w", err)
+	}
+
+	// ── Local Admin ─────────────────────────────────────────────────────
+	if err := ensureLocalAdmin(ctx, pool, info.ID, logger); err != nil {
+		return err
 	}
 
 	logger.Info("seed-demo: completed",

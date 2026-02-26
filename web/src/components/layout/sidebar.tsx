@@ -90,15 +90,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <Link to="/" className="mb-2" title="Home">
           <img src="/owl-logo.png" alt="NightOwl" className="h-7 brightness-0 dark:brightness-100" />
         </Link>
-        {onToggle && (
-          <button
-            onClick={onToggle}
-            className="mb-2 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Expand sidebar"
-          >
-            <PanelLeftOpen className="h-4 w-4" />
-          </button>
-        )}
 
         <nav className="flex flex-1 flex-col items-center gap-1">
           {navItems.map((item) => {
@@ -124,6 +115,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </nav>
 
         <div className="mt-auto flex flex-col items-center gap-1 pt-2">
+          {onToggle && (
+            <button
+              onClick={onToggle}
+              className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Expand sidebar"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={toggle}
             className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -167,15 +167,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     >
                       <Key className="h-4 w-4" /> Personal tokens
                     </Link>
-                    {user.role === "admin" && (
-                      <Link
-                        to="/admin"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
-                      >
-                        <Settings className="h-4 w-4" /> Admin
-                      </Link>
-                    )}
                   </div>
                   <div className="border-t border-border py-1">
                     <a
@@ -199,6 +190,32 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )}
             </div>
           )}
+          {user?.role === "admin" && (
+            <Link
+              to="/admin"
+              className={cn(
+                "rounded-md p-2 transition-colors",
+                matchRoute({ to: "/admin", fuzzy: true })
+                  ? "bg-muted text-accent"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              title="Admin"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          )}
+          <Link
+            to="/about"
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              matchRoute({ to: "/about", fuzzy: false })
+                ? "bg-muted text-accent"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            title="About"
+          >
+            <Info className="h-4 w-4" />
+          </Link>
         </div>
       </aside>
     );
@@ -238,25 +255,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           );
         })}
 
-        <div className="my-2 h-px bg-border" />
-
-        <Link
-          to="/about"
-          className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-            matchRoute({ to: "/about", fuzzy: false })
-              ? "bg-muted text-accent"
-              : "text-sidebar-foreground hover:bg-muted hover:text-foreground"
-          )}
-        >
-          <Info className="h-4 w-4" />
-          About
-        </Link>
       </nav>
 
       {/* Collapse toggle */}
-      {onToggle && (
-        <div className="px-3 pb-1">
+      <div className="px-3 pb-1 space-y-0.5">
+        {onToggle && (
           <button
             onClick={onToggle}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -265,8 +268,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <PanelLeftClose className="h-4 w-4" />
             <span>Collapse</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Footer with user menu */}
       <div className="border-t border-border px-3 py-3">
@@ -318,16 +321,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <Key className="h-4 w-4" />
                     Personal tokens
                   </Link>
-                  {user.role === "admin" && (
-                    <Link
-                      to="/admin"
-                      onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
-                    >
-                      <Settings className="h-4 w-4" />
-                      Admin
-                    </Link>
-                  )}
                   <button
                     onClick={toggle}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
@@ -367,8 +360,33 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ) : null}
       </div>
 
-      <div className="px-4 py-2 text-xs text-muted-foreground">
-        NightOwl v0.1.0 — A Wisbric product
+      <div className="px-3 pb-2 space-y-0.5">
+        {user?.role === "admin" && (
+          <Link
+            to="/admin"
+            className={cn(
+              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+              matchRoute({ to: "/admin", fuzzy: true })
+                ? "bg-muted text-accent"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            Admin
+          </Link>
+        )}
+        <Link
+          to="/about"
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+            matchRoute({ to: "/about", fuzzy: false })
+              ? "bg-muted text-accent"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Info className="h-4 w-4" />
+          About
+        </Link>
       </div>
     </aside>
   );

@@ -99,7 +99,7 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
-    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # certmanager.step.sm/cluster-issuer: step-cluster-issuer
   hosts:
     - host: nightowl.example.com
       paths:

@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/wisbric/nightowl/internal/audit"
-	"github.com/wisbric/nightowl/internal/auth"
-	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/core/pkg/auth"
+	"github.com/wisbric/core/pkg/httpserver"
 )
 
 // Handler provides HTTP handlers for the API keys API.

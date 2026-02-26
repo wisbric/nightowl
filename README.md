@@ -30,7 +30,8 @@ NightOwl is an incident knowledge base, alert management, on-call roster, and es
 - **Escalation Policies** — multi-tier escalation with Slack, SMS, and phone notifications, plus dry-run simulation
 - **Runbooks** — Markdown runbooks with templates, linked directly to incidents
 - **Multi-Tenancy** — schema-per-tenant PostgreSQL isolation
-- **OIDC + API Key Auth** — role-based access control with OIDC and API key authentication
+- **Cookie-Based Sessions** — HttpOnly `wisbric_session` cookie with silent refresh, local admin break-glass login
+- **OIDC + API Key Auth** — role-based access control with OIDC, API keys, and cookie sessions
 - **Audit Trail** — every API action logged with user, IP, and detail
 - **API Documentation** — built-in Swagger UI at `/api/docs`
 - **Observability** — Prometheus metrics and OpenTelemetry tracing
@@ -38,8 +39,8 @@ NightOwl is an incident knowledge base, alert management, on-call roster, and es
 
 ## Tech Stack
 
-**Backend:** Go 1.23+, chi, PostgreSQL 16+ (pgx + sqlc), Redis (go-redis/v9), OIDC, OpenTelemetry
-**Frontend:** React 18, TypeScript, Vite, shadcn/ui, Tailwind CSS, TanStack Query
+**Backend:** Go 1.25+, chi, PostgreSQL 16+ (pgx + sqlc), Redis (go-redis/v9), OIDC, OpenTelemetry
+**Frontend:** React 19, TypeScript 5.9, Vite 7, shadcn/ui, Tailwind CSS 4, TanStack Query 5
 
 ---
 
@@ -164,13 +165,17 @@ helm install nightowl deploy/helm/nightowl \
 
 ---
 
-## OIDC Setup
+## Authentication
 
-NightOwl is compatible with **Keycloak**, **Dex**, **Auth0**, or any standard OIDC provider.
+NightOwl supports multiple authentication methods, all handled by the shared `core/pkg/auth` middleware:
 
-1. Set `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` environment variables.
-2. The JWT issued by the provider must include the following claims: `sub`, `email`, `tenant_slug`.
-3. When OIDC is not configured, NightOwl falls back to API key authentication.
+1. **Cookie sessions** (`wisbric_session`) — HttpOnly, Secure, SameSite=Strict cookies set on login. Used by browser clients. Silent refresh when token has <2h remaining.
+2. **OIDC/OAuth2** — compatible with **Keycloak**, **Dex**, **Auth0**, or any standard OIDC provider. Set `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` environment variables.
+3. **Local admin** — break-glass username/password login at `/auth/local`. Created on seed. Forced password change on first login.
+4. **API keys** — `X-API-Key` header for service-to-service and webhook senders.
+5. **Dev header** — `X-Tenant-Slug` header fallback (dev mode only).
+
+**Middleware precedence:** Cookie → PAT → Session JWT (Bearer) → OIDC JWT (Bearer) → API Key → Dev header.
 
 ---
 
@@ -195,9 +200,9 @@ make docker         # Build Docker image
 cmd/nightowl/           Application entry point
 internal/
   app/                   Application bootstrap
-  auth/                  OIDC + API key authentication
+  authadapter/           Auth storage adapter (implements core auth.Storage)
+  config/                Configuration loading (extends core BaseConfig)
   audit/                 Audit log writer
-  config/                Configuration loading
   db/                    sqlc generated code
   docs/                  Swagger UI + OpenAPI spec handler
   httpserver/            HTTP server + middleware

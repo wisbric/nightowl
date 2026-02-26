@@ -1,16 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import type { StatusResponse } from "@/types/api";
+
+interface StatusInfo {
+  version: string;
+  commit_sha: string;
+  uptime: string;
+}
 
 export function AboutPage() {
   useTitle("About");
 
   const { data: status, isLoading } = useQuery({
-    queryKey: ["status"],
-    queryFn: () => api.get<StatusResponse>("/status"),
+    queryKey: ["public-status"],
+    queryFn: async () => {
+      const res = await fetch("/status");
+      if (!res.ok) throw new Error("Failed to fetch status");
+      return res.json() as Promise<StatusInfo>;
+    },
   });
 
   if (isLoading) return <LoadingSpinner size="lg" />;

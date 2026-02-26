@@ -16,7 +16,7 @@ function validatePassword(pw: string) {
 }
 
 export function ChangePasswordPage() {
-  const { token, login } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -50,10 +50,8 @@ export function ChangePasswordPage() {
     try {
       const res = await fetch("/auth/change-password", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword,
@@ -65,16 +63,13 @@ export function ChangePasswordPage() {
         throw new Error(body.message || "Failed to change password");
       }
 
-      const data = await res.json();
-      // Re-login with new token.
-      if (data.token) {
-        login(data.token, {
-          id: "local-admin",
-          email: "admin@local",
-          display_name: "Local Admin",
-          role: "admin",
-        });
-      }
+      // Cookie is refreshed by the server; update frontend auth state.
+      login({
+        id: "local-admin",
+        email: "admin@local",
+        display_name: "Local Admin",
+        role: "admin",
+      });
 
       navigate({ to: "/" });
     } catch (err) {

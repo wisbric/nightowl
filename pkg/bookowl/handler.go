@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/nightowl/internal/auth"
-	"github.com/wisbric/nightowl/internal/httpserver"
+	"github.com/wisbric/core/pkg/auth"
+	"github.com/wisbric/core/pkg/httpserver"
 	"github.com/wisbric/nightowl/pkg/tenantconfig"
 )
 

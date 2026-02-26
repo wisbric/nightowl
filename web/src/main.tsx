@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createRouter, createRootRoute, createRoute, Outlet, redirect } from "@tanstack/react-router";
+import { RouterProvider, createRouter, createRootRoute, createRoute, Outlet } from "@tanstack/react-router";
 import { AuthProvider } from "@/contexts/auth-context";
 import { AppLayout } from "@/components/layout/app-layout";
 import { initTheme } from "@/hooks/use-theme";
@@ -41,13 +41,14 @@ const queryClient = new QueryClient({
   },
 });
 
-// Auth guard: in dev mode always allow; in prod require token.
+// Auth guard: in dev mode always allow; in prod the cookie-based session
+// is validated by the AuthProvider on mount. This guard prevents unauthenticated
+// route access via a quick check — the AuthProvider does the real validation.
 function requireAuth() {
   if (import.meta.env.DEV) return;
-  const token = localStorage.getItem("nightowl_token");
-  if (!token) {
-    throw redirect({ to: "/login" });
-  }
+  // Cookie-based auth: we can't check cookies from JS (HttpOnly), so we
+  // rely on the AuthProvider's /auth/me check. This guard is a no-op
+  // since the router will render within the AuthProvider context.
 }
 
 // Public layout (no sidebar) for login/callback.
@@ -74,9 +75,6 @@ const authCallbackRoute = createRoute({
   getParentRoute: () => publicRootRoute,
   path: "/auth/callback",
   component: AuthCallbackPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    token: (search.token as string) || "",
-  }),
 });
 
 // Authenticated routes.
