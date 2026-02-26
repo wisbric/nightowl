@@ -9,7 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/slack-go/slack v0.18.0
-	github.com/wisbric/core v0.0.0-20260226011637-960466a82bb4
+	github.com/wisbric/core v0.1.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.35.0
 )
@@ -60,5 +60,3 @@ require (
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/wisbric/core => ../core
