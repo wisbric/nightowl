@@ -14,6 +14,7 @@ import (
 
 	"github.com/wisbric/core/pkg/auth"
 	"github.com/wisbric/core/pkg/httpserver"
+
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 

@@ -34,8 +34,8 @@ type RunbookDetail struct {
 
 // PostMortemRequest is the request body for POST /integration/post-mortems.
 type PostMortemRequest struct {
-	Title     string            `json:"title"`
-	SpaceSlug string            `json:"space_slug"`
+	Title     string             `json:"title"`
+	SpaceSlug string             `json:"space_slug"`
 	Incident  PostMortemIncident `json:"incident"`
 }
 

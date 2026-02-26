@@ -12,9 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	goslack "github.com/slack-go/slack"
 
-	"github.com/wisbric/nightowl/internal/audit"
 	"github.com/wisbric/core/pkg/auth"
 	"github.com/wisbric/core/pkg/httpserver"
+
+	"github.com/wisbric/nightowl/internal/audit"
 	nightowlmm "github.com/wisbric/nightowl/pkg/mattermost"
 )
 

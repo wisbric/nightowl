@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
@@ -36,18 +36,19 @@ export function SettingsPreferencesPage() {
   const [notifWarning, setNotifWarning] = useState(false);
   const [notifInfo, setNotifInfo] = useState(false);
   const [timeRange, setTimeRange] = useState("24h");
+  const [synced, setSynced] = useState(false);
 
-  useEffect(() => {
-    if (prefs) {
-      setTimezone(prefs.timezone || "");
-      setTheme(prefs.theme || "system");
-      setNotifCritical(prefs.notifications?.critical ?? true);
-      setNotifMajor(prefs.notifications?.major ?? true);
-      setNotifWarning(prefs.notifications?.warning ?? false);
-      setNotifInfo(prefs.notifications?.info ?? false);
-      setTimeRange(prefs.dashboard?.default_time_range || "24h");
-    }
-  }, [prefs]);
+  // Sync form state from server data (runs during render, not in effect)
+  if (prefs && !synced) {
+    setSynced(true);
+    setTimezone(prefs.timezone || "");
+    setTheme(prefs.theme || "system");
+    setNotifCritical(prefs.notifications?.critical ?? true);
+    setNotifMajor(prefs.notifications?.major ?? true);
+    setNotifWarning(prefs.notifications?.warning ?? false);
+    setNotifInfo(prefs.notifications?.info ?? false);
+    setTimeRange(prefs.dashboard?.default_time_range || "24h");
+  }
 
   const mutation = useMutation({
     mutationFn: (data: UserPreferences) =>

@@ -12,9 +12,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/wisbric/core/pkg/httpserver"
+
 	"github.com/wisbric/nightowl/internal/audit"
 	"github.com/wisbric/nightowl/internal/db"
-	"github.com/wisbric/core/pkg/httpserver"
 	"github.com/wisbric/nightowl/pkg/tenant"
 )
 

@@ -15,15 +15,17 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/wisbric/nightowl/internal/audit"
 	"github.com/wisbric/core/pkg/auth"
-	"github.com/wisbric/nightowl/internal/config"
 	"github.com/wisbric/core/pkg/httpserver"
 	"github.com/wisbric/core/pkg/platform"
-	"github.com/wisbric/nightowl/internal/seed"
 	coretelemetry "github.com/wisbric/core/pkg/telemetry"
-	nightowlmetrics "github.com/wisbric/nightowl/internal/telemetry"
 	"github.com/wisbric/core/pkg/version"
+
+	"github.com/wisbric/nightowl/internal/audit"
+	"github.com/wisbric/nightowl/internal/authadapter"
+	"github.com/wisbric/nightowl/internal/config"
+	"github.com/wisbric/nightowl/internal/seed"
+	nightowlmetrics "github.com/wisbric/nightowl/internal/telemetry"
 	"github.com/wisbric/nightowl/pkg/alert"
 	"github.com/wisbric/nightowl/pkg/apikey"
 	"github.com/wisbric/nightowl/pkg/bookowl"
@@ -35,7 +37,6 @@ import (
 	"github.com/wisbric/nightowl/pkg/pat"
 	"github.com/wisbric/nightowl/pkg/roster"
 	nightowlslack "github.com/wisbric/nightowl/pkg/slack"
-	"github.com/wisbric/nightowl/internal/authadapter"
 	"github.com/wisbric/nightowl/pkg/tenantconfig"
 	"github.com/wisbric/nightowl/pkg/user"
 )

@@ -8,8 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wisbric/nightowl/internal/db"
 	coretenant "github.com/wisbric/core/pkg/tenant"
+
+	"github.com/wisbric/nightowl/internal/db"
 )
 
 // sqlcStore implements coretenant.TenantStore using nightowl's sqlc queries.

@@ -12,10 +12,10 @@ import (
 
 // Preferences is the JSON shape stored in users.preferences.
 type Preferences struct {
-	Timezone      string                    `json:"timezone,omitempty"`
-	Theme         string                    `json:"theme,omitempty"`
-	Notifications *NotificationPreferences  `json:"notifications,omitempty"`
-	Dashboard     *DashboardPreferences     `json:"dashboard,omitempty"`
+	Timezone      string                   `json:"timezone,omitempty"`
+	Theme         string                   `json:"theme,omitempty"`
+	Notifications *NotificationPreferences `json:"notifications,omitempty"`
+	Dashboard     *DashboardPreferences    `json:"dashboard,omitempty"`
 }
 
 // NotificationPreferences controls per-severity notification toggles.
