@@ -118,6 +118,11 @@ jobs:
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      - name: Pin chart version to tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s|^version:.*|version: \"$VERSION\"|" deploy/helm/nightowl/Chart.yaml
+
       - name: Package Helm chart
         run: helm package deploy/helm/nightowl/
 
