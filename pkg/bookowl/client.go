@@ -38,7 +38,7 @@ func (c *Client) ListRunbooks(ctx context.Context, apiURL, apiKey string, query 
 	if err != nil {
 		return nil, fmt.Errorf("calling BookOwl: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("BookOwl returned HTTP %d", resp.StatusCode)
@@ -65,7 +65,7 @@ func (c *Client) GetRunbook(ctx context.Context, apiURL, apiKey, id string) (*Ru
 	if err != nil {
 		return nil, fmt.Errorf("calling BookOwl: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("runbook not found")
@@ -100,7 +100,7 @@ func (c *Client) CreatePostMortem(ctx context.Context, apiURL, apiKey string, pm
 	if err != nil {
 		return nil, fmt.Errorf("calling BookOwl: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("BookOwl returned HTTP %d", resp.StatusCode)

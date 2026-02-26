@@ -204,7 +204,7 @@ func (h *Handler) handleTestBookOwl(w http.ResponseWriter, r *http.Request) {
 		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{OK: false, Error: err.Error()})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{
