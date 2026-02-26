@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Client wraps the Mattermost REST API v4.
@@ -25,7 +26,7 @@ func NewClient(baseURL, botToken string, logger *slog.Logger) *Client {
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		botToken:   botToken,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: 15 * time.Second},
 		logger:     logger,
 	}
 }

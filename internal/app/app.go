@@ -110,8 +110,11 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	// Session manager.
 	sessionSecret := cfg.SessionSecret
 	if sessionSecret == "" {
+		if !cfg.DevMode {
+			return fmt.Errorf("missing NIGHTOWL_SESSION_SECRET (required when DEV_MODE=false)")
+		}
 		sessionSecret = auth.GenerateDevSecret()
-		logger.Info("session: using auto-generated dev secret (set NIGHTOWL_SESSION_SECRET in production)")
+		logger.Info("session: using auto-generated dev secret (DEV_MODE=true)")
 	}
 	sessionMaxAge, err := time.ParseDuration(cfg.SessionMaxAge)
 	if err != nil {
@@ -148,6 +151,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	srv := httpserver.NewServer(httpserver.ServerConfig{
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
+		DevMode:            cfg.DevMode,
 	}, logger, db, rdb, metricsReg, sessionMgr, oidcAuth, patAuth, authStore)
 
 	// --- Auth routes (public, pre-authentication) ---
@@ -162,7 +166,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	srv.Router.Get("/auth/config", localAdminHandler.HandleAuthConfig)
 
 	// Existing email/password login (for tenant users, not local admins).
-	loginHandler := auth.NewLoginHandler(sessionMgr, authStore, logger, oidcAuth != nil)
+	loginHandler := auth.NewLoginHandler(sessionMgr, authStore, logger, oidcAuth != nil, rateLimiter)
 	srv.Router.Post("/auth/login", loginHandler.HandleLogin)
 	srv.Router.Get("/auth/me", loginHandler.HandleMe)
 	srv.Router.Post("/auth/logout", loginHandler.HandleLogout)
