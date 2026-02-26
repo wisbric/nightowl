@@ -47,7 +47,7 @@ NightOwl is an incident knowledge base, alert management, on-call roster, and es
 ## Quick Start
 
 ```bash
-# Prerequisites: Go 1.23+, Docker, Node.js 20+
+# Prerequisites: Go 1.25+, Docker, Node.js 20+
 
 # Start infrastructure
 docker compose up -d
@@ -128,13 +128,17 @@ Full interactive documentation is available at [`/api/docs`](http://localhost:80
 | `REDIS_URL` | `redis://...` | Redis connection string |
 | `LOG_LEVEL` | `info` | Log level (`debug`/`info`/`warn`/`error`) |
 | `LOG_FORMAT` | `json` | Log format (`json`/`text`) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://...` | OpenTelemetry collector |
-| `OIDC_ISSUER_URL` | `https://...` | OIDC provider URL |
+| `OTEL_ENDPOINT` | `http://...` | OpenTelemetry collector |
+| `OIDC_ISSUER` | `https://...` | OIDC issuer URL |
 | `OIDC_CLIENT_ID` | `nightowl` | OIDC client ID |
+| `OIDC_CLIENT_SECRET` | `...` | OIDC client secret (required for auth code flow) |
+| `OIDC_REDIRECT_URL` | `http://localhost:5173/auth/callback` | OIDC redirect URL |
+| `NIGHTOWL_SESSION_SECRET` | `...` | Session signing secret (required unless `DEV_MODE=true`) |
+| `DEV_MODE` | `false` | Enables dev-only auth shortcuts |
 | `SLACK_BOT_TOKEN` | `xoxb-...` | Slack bot token |
 | `SLACK_SIGNING_SECRET` | `...` | Slack signing secret |
 | `SLACK_ALERT_CHANNEL` | `#alerts` | Slack alert channel |
-| `CORS_ALLOWED_ORIGINS` | `*` | CORS origins (comma-separated) |
+| `CORS_ALLOWED_ORIGINS` | `*` | CORS origins (comma-separated). If `*` is used, credentials are disabled. |
 
 ---
 
@@ -170,10 +174,10 @@ helm install nightowl deploy/helm/nightowl \
 NightOwl supports multiple authentication methods, all handled by the shared `core/pkg/auth` middleware:
 
 1. **Cookie sessions** (`wisbric_session`) — HttpOnly, Secure, SameSite=Strict cookies set on login. Used by browser clients. Silent refresh when token has <2h remaining.
-2. **OIDC/OAuth2** — compatible with **Keycloak**, **Dex**, **Auth0**, or any standard OIDC provider. Set `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` environment variables.
+2. **OIDC/OAuth2** — compatible with **Keycloak**, **Dex**, **Auth0**, or any standard OIDC provider. Set `OIDC_ISSUER` and `OIDC_CLIENT_ID` (and `OIDC_CLIENT_SECRET` + `OIDC_REDIRECT_URL` for the auth code flow).
 3. **Local admin** — break-glass username/password login at `/auth/local`. Created on seed. Forced password change on first login.
 4. **API keys** — `X-API-Key` header for service-to-service and webhook senders.
-5. **Dev header** — `X-Tenant-Slug` header fallback (dev mode only).
+5. **Dev header** — `X-Tenant-Slug` header fallback (requires `DEV_MODE=true`).
 
 **Middleware precedence:** Cookie → PAT → Session JWT (Bearer) → OIDC JWT (Bearer) → API Key → Dev header.
 
