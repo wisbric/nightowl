@@ -198,6 +198,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		}
 
 		oidcFlow := auth.NewOIDCFlowHandler(oauth2Cfg, oidcAuth, sessionMgr, authStore, rdb, logger)
+		oidcFlow.SuccessURL = "/"
 		srv.Router.Get("/auth/oidc/login", oidcFlow.HandleLogin)
 		srv.Router.Get("/auth/oidc/callback", oidcFlow.HandleCallback)
 		logger.Info("OIDC Authorization Code flow enabled", "redirect_url", cfg.OIDCRedirectURL)

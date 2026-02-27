@@ -44,6 +44,7 @@ func (a *OIDCAuthenticator) Endpoint() oauth2.Endpoint {
 }
 
 // Authenticate validates a Bearer token and returns the extracted claims.
+// It requires the tenant_slug claim for service-to-service API authentication.
 func (a *OIDCAuthenticator) Authenticate(ctx context.Context, bearerToken string) (*OIDCClaims, error) {
 	token := strings.TrimPrefix(bearerToken, "Bearer ")
 	token = strings.TrimPrefix(token, "bearer ")
@@ -68,6 +69,33 @@ func (a *OIDCAuthenticator) Authenticate(ctx context.Context, bearerToken string
 	}
 	if claims.TenantSlug == "" {
 		return nil, fmt.Errorf("token missing tenant_slug claim")
+	}
+	if claims.Role == "" {
+		claims.Role = RoleEngineer
+	}
+	if !IsValidRole(claims.Role) {
+		claims.Role = RoleEngineer
+	}
+
+	return &claims, nil
+}
+
+// AuthenticateCallbackToken validates an OIDC ID token from the Authorization
+// Code flow. Unlike Authenticate, it does not require the tenant_slug claim
+// because the tenant is resolved from the OAuth state parameter.
+func (a *OIDCAuthenticator) AuthenticateCallbackToken(ctx context.Context, rawToken string) (*OIDCClaims, error) {
+	idToken, err := a.Verifier.Verify(ctx, rawToken)
+	if err != nil {
+		return nil, fmt.Errorf("verifying token: %w", err)
+	}
+
+	var claims OIDCClaims
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("extracting claims: %w", err)
+	}
+
+	if claims.Subject == "" {
+		return nil, fmt.Errorf("token missing sub claim")
 	}
 	if claims.Role == "" {
 		claims.Role = RoleEngineer
