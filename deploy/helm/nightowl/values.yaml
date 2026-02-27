@@ -161,3 +161,7 @@ podDisruptionBudget:
 migrations:
   globalDir: /migrations/global
   tenantDir: /migrations/tenant
+
+# -- Extra volumes to mount (e.g. CA certificates)
+extraVolumes: []
+extraVolumeMounts: []
