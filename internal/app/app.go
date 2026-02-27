@@ -163,7 +163,23 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	localAdminHandler := auth.NewLocalAdminHandler(sessionMgr, authStore, logger, rateLimiter)
 	srv.Router.Post("/auth/local", localAdminHandler.HandleLocalLogin)
 	srv.Router.Post("/auth/change-password", localAdminHandler.HandleChangePassword)
-	srv.Router.Get("/auth/config", localAdminHandler.HandleAuthConfig)
+
+	// Auth config endpoint — the login page calls this to decide whether to
+	// show the OIDC button. We check env-var-based OIDC first (global),
+	// then fall back to per-tenant DB config if a ?tenant= param is given.
+	srv.Router.Get("/auth/config", func(w http.ResponseWriter, r *http.Request) {
+		oidcEnabled := oidcAuth != nil
+		if !oidcEnabled {
+			if tenant := r.URL.Query().Get("tenant"); tenant != "" {
+				oidcEnabled = localAdminHandler.CheckOIDCEnabled(r.Context(), tenant)
+			}
+		}
+		httpserver.Respond(w, http.StatusOK, auth.AuthConfigResponse{
+			OIDCEnabled:  oidcEnabled,
+			OIDCName:     "Sign in with SSO",
+			LocalEnabled: true,
+		})
+	})
 
 	// Existing email/password login (for tenant users, not local admins).
 	loginHandler := auth.NewLoginHandler(sessionMgr, authStore, logger, oidcAuth != nil, rateLimiter)
@@ -177,13 +193,8 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 			ClientID:     cfg.OIDCClientID,
 			ClientSecret: cfg.OIDCClientSecret,
 			RedirectURL:  cfg.OIDCRedirectURL,
+			Endpoint:     oidcAuth.Endpoint(),
 			Scopes:       []string{"openid", "email", "profile"},
-		}
-		// The Endpoint is discovered from the OIDC provider, but oauth2
-		// needs it explicitly. We reuse the issuer URL.
-		oauth2Cfg.Endpoint = oauth2.Endpoint{
-			AuthURL:  cfg.OIDCIssuerURL + "/authorize",
-			TokenURL: cfg.OIDCIssuerURL + "/oauth/token",
 		}
 
 		oidcFlow := auth.NewOIDCFlowHandler(oauth2Cfg, oidcAuth, sessionMgr, authStore, rdb, logger)
