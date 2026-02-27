@@ -37,11 +37,6 @@ spec:
                 name: {{ include "nightowl.fullname" . }}
             - secretRef:
                 name: {{ include "nightowl.secretName" . }}
-          livenessProbe:
-            exec:
-              command: ["/nightowl", "-mode", "healthcheck"]
-            initialDelaySeconds: 10
-            periodSeconds: 30
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           {{- with .Values.extraVolumeMounts }}
