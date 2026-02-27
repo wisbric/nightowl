@@ -17,13 +17,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [emailPassword, setEmailPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
   const [retryAfter, setRetryAfter] = useState(0);
-  const [loginMode, setLoginMode] = useState<"local-admin" | "email">("local-admin");
 
   useEffect(() => {
     fetch("/auth/config")
@@ -91,35 +88,6 @@ export function LoginPage() {
     }
   }
 
-  async function handleEmailSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      const res = await fetch("/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: emailPassword }),
-        credentials: "same-origin",
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "Login failed" }));
-        throw new Error(body.message || "Invalid email or password");
-      }
-
-      const data = await res.json();
-      // Cookie is set by the server; update frontend auth state.
-      login(data.user);
-      navigate({ to: "/" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function handleOIDCLogin() {
     window.location.href = "/auth/oidc/login";
   }
@@ -173,123 +141,58 @@ export function LoginPage() {
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-card px-2 text-muted-foreground">
-                    {authConfig.oidc_enabled ? "" : "OIDC not configured"}
+                    OIDC not configured
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Login mode tabs */}
-            <div className="flex gap-1 rounded-md bg-muted p-1">
-              <button
-                type="button"
-                onClick={() => { setLoginMode("local-admin"); setError(null); }}
-                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                  loginMode === "local-admin"
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Local Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLoginMode("email"); setError(null); }}
-                className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-                  loginMode === "email"
-                    ? "bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Email
-              </button>
-            </div>
+            <form onSubmit={handleLocalAdminSubmit} className="space-y-3">
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium mb-1">
+                  Username
+                </label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="admin"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  autoComplete="username"
+                />
+              </div>
+              <div>
+                <label htmlFor="local-password" className="block text-sm font-medium mb-1">
+                  Password
+                </label>
+                <Input
+                  id="local-password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
 
-            {loginMode === "local-admin" ? (
-              <form onSubmit={handleLocalAdminSubmit} className="space-y-3">
-                <div>
-                  <label htmlFor="username" className="block text-sm font-medium mb-1">
-                    Username
-                  </label>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="admin"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    autoComplete="username"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="local-password" className="block text-sm font-medium mb-1">
-                    Password
-                  </label>
-                  <Input
-                    id="local-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
-                </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
 
-                {error && <p className="text-sm text-destructive">{error}</p>}
-
-                {retryAfter > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Try again in {retryAfter}s
-                  </p>
-                )}
-
-                <Button type="submit" className="w-full" disabled={loading || retryAfter > 0}>
-                  {loading ? "Signing in..." : "Sign in"}
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Rate limit: 10 attempts / 15 min
+              {retryAfter > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Try again in {retryAfter}s
                 </p>
-              </form>
-            ) : (
-              <form onSubmit={handleEmailSubmit} className="space-y-3">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium mb-1">
-                    Email
-                  </label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="alice@acme.example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="email-password" className="block text-sm font-medium mb-1">
-                    Password
-                  </label>
-                  <Input
-                    id="email-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={emailPassword}
-                    onChange={(e) => setEmailPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
-                </div>
+              )}
 
-                {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading || retryAfter > 0}>
+                {loading ? "Signing in..." : "Sign in"}
+              </Button>
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign in"}
-                </Button>
-              </form>
-            )}
+              <p className="text-xs text-muted-foreground text-center">
+                Rate limit: 10 attempts / 15 min
+              </p>
+            </form>
           </CardContent>
         </Card>
 
