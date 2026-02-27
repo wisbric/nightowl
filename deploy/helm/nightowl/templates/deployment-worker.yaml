@@ -30,7 +30,7 @@ spec:
           image: {{ include "nightowl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: NIGHTOWL_MODE
+            - name: APP_MODE
               value: worker
           envFrom:
             - configMapRef:
