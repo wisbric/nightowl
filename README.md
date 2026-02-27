@@ -16,10 +16,6 @@
 
 NightOwl is an incident knowledge base, alert management, on-call roster, and escalation platform built for 24/7 operations teams running Kubernetes infrastructure across multiple time zones. It combines a searchable knowledge base of past incidents with real-time alert ingestion, intelligent deduplication, configurable escalation policies, and follow-the-sun roster management — all in a single, self-hosted binary. It is a [Wisbric](https://wisbric.com) product.
 
-<p align="center">
-  <img src="docs/dashboard.png" alt="NightOwl Dashboard" width="900">
-</p>
-
 ---
 
 ## Features
