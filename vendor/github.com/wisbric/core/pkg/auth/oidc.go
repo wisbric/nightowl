@@ -11,11 +11,28 @@ import (
 
 // OIDCClaims are the JWT claims we extract for authentication.
 type OIDCClaims struct {
-	Subject    string `json:"sub"`
-	Email      string `json:"email"`
-	TenantSlug string `json:"tenant_slug"`
-	Role       string `json:"role"`
-	OrgID      string `json:"org_id"`
+	Subject           string `json:"sub"`
+	Email             string `json:"email"`
+	Name              string `json:"name"`
+	PreferredUsername string `json:"preferred_username"`
+	TenantSlug        string `json:"tenant_slug"`
+	Role              string `json:"role"`
+	OrgID             string `json:"org_id"`
+}
+
+// DisplayName returns the best available display name from the OIDC claims,
+// preferring the full name, then preferred_username, then email, then subject.
+func (c *OIDCClaims) DisplayName() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	if c.PreferredUsername != "" {
+		return c.PreferredUsername
+	}
+	if c.Email != "" {
+		return c.Email
+	}
+	return c.Subject
 }
 
 // OIDCAuthenticator validates OIDC JWTs and extracts claims.

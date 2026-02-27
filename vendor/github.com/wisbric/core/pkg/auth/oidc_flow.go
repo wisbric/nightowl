@@ -143,9 +143,10 @@ func (h *OIDCFlowHandler) HandleCallback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Issue session JWT.
+	// Issue session JWT — use the DB display name (resolved from OIDC claims
+	// by the adapter), not the raw subject UUID.
 	sessClaims := SessionClaims{
-		Subject:    claims.Subject,
+		Subject:    userRow.DisplayName,
 		Email:      claims.Email,
 		Role:       claims.Role,
 		TenantSlug: claims.TenantSlug,
@@ -171,7 +172,7 @@ func (h *OIDCFlowHandler) HandleCallback(w http.ResponseWriter, r *http.Request)
 
 // findOrCreateUser resolves an OIDC user to a database user row.
 func (h *OIDCFlowHandler) findOrCreateUser(ctx context.Context, claims *OIDCClaims) (*UserRow, string, error) {
-	return h.store.FindOrCreateOIDCUser(ctx, claims.TenantSlug, claims.Subject, claims.Email, claims.Role)
+	return h.store.FindOrCreateOIDCUser(ctx, claims.TenantSlug, claims.Subject, claims.Email, claims.DisplayName(), claims.Role)
 }
 
 func randomState() (string, error) {
