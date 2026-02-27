@@ -86,7 +86,7 @@ func (a *Adapter) ListTenants(ctx context.Context) ([]auth.TenantResult, error) 
 	return res, nil
 }
 
-func (a *Adapter) FindOrCreateOIDCUser(ctx context.Context, tenantSlug, subject, email, role string) (*auth.UserRow, string, error) {
+func (a *Adapter) FindOrCreateOIDCUser(ctx context.Context, tenantSlug, subject, email, displayName, role string) (*auth.UserRow, string, error) {
 	q := db.New(a.pool)
 	t, err := q.GetTenantBySlug(ctx, tenantSlug)
 	if err != nil {
@@ -110,13 +110,24 @@ func (a *Adapter) FindOrCreateOIDCUser(ctx context.Context, tenantSlug, subject,
 		user, err = tq.CreateUser(ctx, db.CreateUserParams{
 			ExternalID:  subject,
 			Email:       email,
-			DisplayName: email,
+			DisplayName: displayName,
 			Timezone:    "UTC",
 			Role:        role,
 		})
 		if err != nil {
 			return nil, "", fmt.Errorf("creating user: %w", err)
 		}
+	} else if user.DisplayName != displayName || user.Email != email {
+		// Update display name and email from OIDC claims on subsequent logins.
+		user, _ = tq.UpdateUser(ctx, db.UpdateUserParams{
+			ID:          user.ID,
+			Email:       email,
+			DisplayName: displayName,
+			Timezone:    user.Timezone,
+			Phone:       user.Phone,
+			SlackUserID: user.SlackUserID,
+			Role:        user.Role,
+		})
 	}
 
 	return &auth.UserRow{
