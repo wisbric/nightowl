@@ -24,6 +24,9 @@ type Config struct {
 	SlackSigningSecret string `env:"SLACK_SIGNING_SECRET"`
 	SlackAlertChannel  string `env:"SLACK_ALERT_CHANNEL"`
 
+	// Admin
+	AdminPassword string `env:"NIGHTOWL_ADMIN_PASSWORD"`
+
 	// Mattermost
 	MattermostURL              string `env:"MATTERMOST_URL"`
 	MattermostBotToken         string `env:"MATTERMOST_BOT_TOKEN"`

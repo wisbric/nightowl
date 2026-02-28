@@ -87,6 +87,7 @@ secrets:
   oidcClientSecret: ""
   oidcRedirectUrl: ""
   sessionSecret: ""
+  adminPassword: ""
   slackBotToken: ""
   slackSigningSecret: ""
   slackAlertChannel: ""
@@ -161,6 +162,10 @@ podDisruptionBudget:
 migrations:
   globalDir: /migrations/global
   tenantDir: /migrations/tenant
+
+# -- Seed job (runs on first install to bootstrap tenant + admin)
+seed:
+  enabled: false
 
 # -- Extra volumes to mount (e.g. CA certificates)
 extraVolumes: []

@@ -1,0 +1,54 @@
+{{- if .Values.seed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nightowl.fullname" . }}-seed
+  labels:
+    {{- include "nightowl.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seed
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "nightowl.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: seed
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nightowl.serviceAccountName" . }}
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: {{ include "nightowl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NIGHTOWL_MODE
+              value: seed
+          envFrom:
+            - configMapRef:
+                name: {{ include "nightowl.fullname" . }}
+            - secretRef:
+                name: {{ include "nightowl.secretName" . }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          {{- with .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

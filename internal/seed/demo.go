@@ -21,7 +21,7 @@ import (
 
 // RunDemo provisions the "acme" tenant with comprehensive demo data.
 // It is destructive: it drops and recreates the tenant if it exists.
-func RunDemo(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir string, logger *slog.Logger) error {
+func RunDemo(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir string, logger *slog.Logger, adminPassword string) error {
 	q := db.New(pool)
 
 	// Drop existing tenant so we always get fresh demo data.
@@ -654,7 +654,7 @@ Longhorn's over-provisioning percentage is set to 100% (default), meaning it won
 	}
 
 	// ── Local Admin ─────────────────────────────────────────────────────
-	if err := ensureLocalAdmin(ctx, pool, info.ID, logger); err != nil {
+	if err := ensureLocalAdmin(ctx, pool, info.ID, logger, adminPassword); err != nil {
 		return err
 	}
 

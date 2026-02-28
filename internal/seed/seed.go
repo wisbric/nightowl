@@ -24,7 +24,7 @@ const DevAPIKey = "ow_dev_seed_key_do_not_use_in_production"
 // Run provisions the "acme" development tenant and populates it with sample
 // users and services. It is idempotent: re-running will ensure all resources
 // exist without duplicating them.
-func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir string, logger *slog.Logger) error {
+func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir string, logger *slog.Logger, adminPassword string) error {
 	prov := &tenant.Provisioner{
 		DB:            pool,
 		DatabaseURL:   databaseURL,
@@ -39,7 +39,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 	if err == nil {
 		logger.Info("seed: tenant 'acme' already exists, ensuring local admin")
 		// Always ensure local admin exists even when tenant was already created.
-		if err := ensureLocalAdmin(ctx, pool, existing.ID, logger); err != nil {
+		if err := ensureLocalAdmin(ctx, pool, existing.ID, logger, adminPassword); err != nil {
 			return err
 		}
 		return nil
@@ -159,7 +159,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 	)
 
 	// Create local admin for this tenant.
-	if err := ensureLocalAdmin(ctx, pool, info.ID, logger); err != nil {
+	if err := ensureLocalAdmin(ctx, pool, info.ID, logger, adminPassword); err != nil {
 		return err
 	}
 
@@ -172,25 +172,34 @@ func Run(ctx context.Context, pool *pgxpool.Pool, databaseURL, migrationsDir str
 	return nil
 }
 
-// ensureLocalAdmin creates the local admin account if it doesn't already exist.
-// Uses ON CONFLICT to be idempotent.
-func ensureLocalAdmin(ctx context.Context, pool *pgxpool.Pool, tenantID [16]byte, logger *slog.Logger) error {
-	localAdminPassword := "nightowl-admin"
+// ensureLocalAdmin creates or updates the local admin account.
+// When adminPassword is explicitly set, the password is always updated (ON CONFLICT DO UPDATE).
+// When adminPassword is empty, the default is used and existing admins are left untouched.
+func ensureLocalAdmin(ctx context.Context, pool *pgxpool.Pool, tenantID [16]byte, logger *slog.Logger, adminPassword string) error {
+	localAdminPassword := adminPassword
+	if localAdminPassword == "" {
+		localAdminPassword = "nightowl-admin"
+	}
 	adminPasswordHash, err := bcrypt.GenerateFromPassword([]byte(localAdminPassword), 12)
 	if err != nil {
 		return fmt.Errorf("hashing local admin password: %w", err)
 	}
 
-	tag, err := pool.Exec(ctx,
-		"INSERT INTO public.local_admins (tenant_id, username, password_hash, must_change) VALUES ($1, 'admin', $2, true) ON CONFLICT (tenant_id) DO NOTHING",
-		tenantID, string(adminPasswordHash),
-	)
+	var query string
+	if adminPassword != "" {
+		// Explicit password: upsert so existing admin gets the configured password.
+		query = "INSERT INTO public.local_admins (tenant_id, username, password_hash, must_change) VALUES ($1, 'admin', $2, true) ON CONFLICT (tenant_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, must_change = true"
+	} else {
+		query = "INSERT INTO public.local_admins (tenant_id, username, password_hash, must_change) VALUES ($1, 'admin', $2, true) ON CONFLICT (tenant_id) DO NOTHING"
+	}
+
+	tag, err := pool.Exec(ctx, query, tenantID, string(adminPasswordHash))
 	if err != nil {
 		return fmt.Errorf("creating local admin: %w", err)
 	}
 
 	if tag.RowsAffected() > 0 {
-		logger.Info("seed: created local admin", "username", "admin", "password", localAdminPassword)
+		logger.Info("seed: created/updated local admin", "username", "admin")
 	} else {
 		logger.Info("seed: local admin already exists")
 	}

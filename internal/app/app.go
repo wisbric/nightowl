@@ -98,9 +98,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	case "worker":
 		return runWorker(ctx, logger, db, rdb, metricsReg)
 	case "seed":
-		return seed.Run(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
+		return seed.Run(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger, cfg.AdminPassword)
 	case "seed-demo":
-		return seed.RunDemo(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger)
+		return seed.RunDemo(ctx, db, cfg.DatabaseURL, cfg.MigrationsTenantDir, logger, cfg.AdminPassword)
 	default:
 		return fmt.Errorf("unknown mode: %s", cfg.Mode)
 	}
