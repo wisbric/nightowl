@@ -19,7 +19,6 @@ import {
   User,
   PanelLeftClose,
   PanelLeftOpen,
-  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
