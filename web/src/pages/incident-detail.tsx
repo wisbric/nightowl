@@ -41,7 +41,7 @@ export function IncidentDetailPage() {
   const [editing, setEditing] = useState(isNew);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
-  const [postMortemResult, setPostMortemResult] = useState<BookOwlPostMortemResponse | null>(null);
+  const [postMortemCreating, setPostMortemCreating] = useState(false);
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ["incident", incidentId],
@@ -123,8 +123,9 @@ export function IncidentDetailPage() {
   });
 
   const postMortemMutation = useMutation({
-    mutationFn: () =>
-      api.post<BookOwlPostMortemResponse>("/bookowl/post-mortems", {
+    mutationFn: async () => {
+      setPostMortemCreating(true);
+      const pm = await api.post<BookOwlPostMortemResponse>("/bookowl/post-mortems", {
         title: `Post-Mortem: ${incident!.title}`,
         space_slug: "post-mortems",
         incident: {
@@ -137,9 +138,17 @@ export function IncidentDetailPage() {
           resolved_at: incident!.updated_at,
           resolved_by: "",
         },
-      }),
-    onSuccess: (data) => {
-      setPostMortemResult(data);
+      });
+      // Persist the post-mortem URL back to the incident
+      await api.put(`/incidents/${incident!.id}/post-mortem-url`, { url: pm.url });
+      return pm;
+    },
+    onSuccess: () => {
+      setPostMortemCreating(false);
+      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+    },
+    onError: () => {
+      setPostMortemCreating(false);
     },
   });
 
@@ -154,8 +163,8 @@ export function IncidentDetailPage() {
     ? (bookowlRunbooks?.items ?? []).map((rb) => ({ id: rb.id, title: rb.title }))
     : [];
 
-  // Can create post-mortem when BookOwl is integrated and incident has root_cause/solution
-  const canCreatePostMortem = bookowlIntegrated && incident && (incident.root_cause || incident.solution);
+  // Can create post-mortem when BookOwl is integrated, incident has root_cause/solution, and no post-mortem exists yet
+  const canCreatePostMortem = bookowlIntegrated && incident && !incident.post_mortem_url && (incident.root_cause || incident.solution);
 
   if (!isNew && isLoading) return <LoadingSpinner size="lg" />;
 
@@ -253,18 +262,18 @@ export function IncidentDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              {canCreatePostMortem && !postMortemResult && (
+              {canCreatePostMortem && (
                 <Button
                   variant="outline"
                   onClick={() => postMortemMutation.mutate()}
-                  disabled={postMortemMutation.isPending}
+                  disabled={postMortemCreating}
                 >
                   <FileText className="h-3.5 w-3.5 mr-1" />
-                  {postMortemMutation.isPending ? "Creating..." : "Create Post-Mortem"}
+                  {postMortemCreating ? "Creating..." : "Create Post-Mortem"}
                 </Button>
               )}
-              {postMortemResult && (
-                <a href={postMortemResult.url} target="_blank" rel="noopener noreferrer">
+              {incident.post_mortem_url && (
+                <a href={incident.post_mortem_url} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline">
                     <ExternalLink className="h-3.5 w-3.5 mr-1" />
                     View Post-Mortem

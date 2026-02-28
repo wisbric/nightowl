@@ -372,8 +372,34 @@ func computeDiff(old, new IncidentRow) map[string]any {
 	addIfChanged("root_cause", old.RootCause, new.RootCause)
 	addIfChanged("solution", old.Solution, new.Solution)
 	addIfChanged("runbook_id", old.RunbookID, new.RunbookID)
+	addIfChanged("post_mortem_url", old.PostMortemURL, new.PostMortemURL)
 
 	return diff
+}
+
+// SetPostMortemURL sets the post-mortem URL on an incident and records a history entry.
+func (s *Service) SetPostMortemURL(ctx context.Context, id uuid.UUID, url string, userID pgtype.UUID) (Response, error) {
+	old, err := s.store.Get(ctx, id)
+	if err != nil {
+		return Response{}, fmt.Errorf("getting incident: %w", err)
+	}
+
+	updated, err := s.store.SetPostMortemURL(ctx, id, url)
+	if err != nil {
+		return Response{}, fmt.Errorf("setting post_mortem_url: %w", err)
+	}
+
+	diff := computeDiff(old, updated)
+	if len(diff) > 0 {
+		diffJSON, _ := json.Marshal(diff)
+		if histErr := s.store.CreateHistory(ctx, id, userID, "updated", diffJSON); histErr != nil {
+			s.logger.Warn("failed to record post-mortem URL history", "error", histErr, "incident_id", id)
+		}
+	}
+
+	resp := updated.ToResponse()
+	s.enrichRunbook(ctx, &resp)
+	return resp, nil
 }
 
 // enrichRunbook populates RunbookTitle and RunbookContent on a Response if it has a RunbookID.

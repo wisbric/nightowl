@@ -1,5 +1,6 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Bell,
@@ -18,6 +19,7 @@ import {
   User,
   PanelLeftClose,
   PanelLeftOpen,
+  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
@@ -71,6 +73,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const showLogout = !import.meta.env.DEV;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const { data: authConfig } = useQuery({
+    queryKey: ["auth-config"],
+    queryFn: async () => {
+      const res = await fetch("/auth/config");
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
 
   useEffect(() => {
     if (!showUserMenu) return;
@@ -168,14 +180,26 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <Key className="h-4 w-4" /> Personal tokens
                     </Link>
                   </div>
-                  <div className="border-t border-border py-1">
-                    <a
-                      href="#"
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
-                    >
-                      <ExternalLink className="h-4 w-4" /> BookOwl
-                    </a>
-                  </div>
+                  {(authConfig?.bookowl_url || authConfig?.ticketowl_url) && (
+                    <div className="border-t border-border py-1">
+                      {authConfig.bookowl_url && (
+                        <a
+                          href={authConfig.bookowl_url}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
+                        >
+                          <ExternalLink className="h-4 w-4" /> BookOwl
+                        </a>
+                      )}
+                      {authConfig.ticketowl_url && (
+                        <a
+                          href={authConfig.ticketowl_url}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
+                        >
+                          <ExternalLink className="h-4 w-4" /> TicketOwl
+                        </a>
+                      )}
+                    </div>
+                  )}
                   {showLogout && (
                     <div className="border-t border-border py-1">
                       <button
@@ -330,15 +354,28 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   </button>
                 </div>
 
-                <div className="border-t border-border py-1">
-                  <a
-                    href="#"
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    BookOwl
-                  </a>
-                </div>
+                {(authConfig?.bookowl_url || authConfig?.ticketowl_url) && (
+                  <div className="border-t border-border py-1">
+                    {authConfig.bookowl_url && (
+                      <a
+                        href={authConfig.bookowl_url}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        BookOwl
+                      </a>
+                    )}
+                    {authConfig.ticketowl_url && (
+                      <a
+                        href={authConfig.ticketowl_url}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-muted"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        TicketOwl
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {showLogout && (
                   <div className="border-t border-border py-1">

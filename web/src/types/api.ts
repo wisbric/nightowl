@@ -85,6 +85,7 @@ export interface Incident {
   runbook_id?: string | null;
   runbook_title?: string | null;
   runbook_content?: string | null;
+  post_mortem_url?: string | null;
   resolution_count: number;
   created_at: string;
   updated_at: string;

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/wisbric/core/pkg/httpserver"
@@ -85,11 +86,17 @@ type WebhookHandler struct {
 	dedup   *Deduplicator
 	enrich  *Enricher
 	metrics *WebhookMetrics
+	cfgSvc  BookOwlConfigResolver
+}
+
+// BookOwlConfigResolver resolves BookOwl API credentials for a tenant.
+type BookOwlConfigResolver interface {
+	GetBookOwlConfig(ctx context.Context, tenantID uuid.UUID) (apiURL, apiKey string, err error)
 }
 
 // NewWebhookHandler creates a WebhookHandler.
-func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher, metrics *WebhookMetrics) *WebhookHandler {
-	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich, metrics: metrics}
+func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher, metrics *WebhookMetrics, cfgSvc BookOwlConfigResolver) *WebhookHandler {
+	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich, metrics: metrics, cfgSvc: cfgSvc}
 }
 
 // Routes returns a chi.Router with webhook routes mounted.
@@ -167,7 +174,19 @@ func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized
 
 	// Enrich new alerts with knowledge base matches.
 	if h.enrich != nil && normalized.Status == "firing" {
-		result := h.enrich.Enrich(ctx, conn, resp.ID, normalized.Fingerprint, normalized.Title, normalized.Description)
+		// Resolve BookOwl config for this tenant (best-effort).
+		var bwCfg *BookOwlConfig
+		if h.cfgSvc != nil {
+			if info := tenant.FromContext(ctx); info != nil {
+				apiURL, apiKey, err := h.cfgSvc.GetBookOwlConfig(ctx, info.ID)
+				if err != nil {
+					h.logger.Warn("failed to resolve bookowl config for enrichment", "error", err)
+				} else if apiURL != "" && apiKey != "" {
+					bwCfg = &BookOwlConfig{APIURL: apiURL, APIKey: apiKey}
+				}
+			}
+		}
+		result := h.enrich.Enrich(ctx, conn, resp.ID, normalized.Fingerprint, normalized.Title, normalized.Description, bwCfg)
 		if result.IsEnriched {
 			resp.MatchedIncidentID = &result.MatchedIncidentID
 			if result.SuggestedSolution != "" {

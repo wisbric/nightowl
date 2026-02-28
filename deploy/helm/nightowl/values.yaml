@@ -74,6 +74,9 @@ config:
   logFormat: json
   corsAllowedOrigins: "*"
   metricsPath: /metrics
+  bookowlUrl: ""       # BookOwl web URL for sidebar link
+  ticketowlUrl: ""     # TicketOwl web URL for sidebar link
+  bookowlApiUrl: ""    # BookOwl API URL for integration default
 
 # -- External secrets (create Secret resource or reference existing)
 secrets:

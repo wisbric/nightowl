@@ -32,4 +32,11 @@ type Config struct {
 	MattermostBotToken         string `env:"MATTERMOST_BOT_TOKEN"`
 	MattermostWebhookSecret    string `env:"MATTERMOST_WEBHOOK_SECRET"`
 	MattermostDefaultChannelID string `env:"MATTERMOST_DEFAULT_CHANNEL_ID"`
+
+	// Cross-service links (public URLs for sidebar navigation)
+	BookOwlURL   string `env:"NIGHTOWL_BOOKOWL_URL"`
+	TicketOwlURL string `env:"NIGHTOWL_TICKETOWL_URL"`
+
+	// BookOwl integration default (API URL for admin config placeholder)
+	BookOwlAPIURL string `env:"NIGHTOWL_BOOKOWL_API_URL"`
 }

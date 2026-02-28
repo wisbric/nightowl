@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/wisbric/nightowl/internal/db"
+	"github.com/wisbric/nightowl/pkg/bookowl"
 )
 
 // EnrichResult describes the outcome of knowledge base enrichment for an alert.
@@ -21,21 +22,29 @@ type EnrichResult struct {
 	MatchMethod       string // "fingerprint" or "text_search"
 }
 
+// BookOwlConfig holds per-tenant BookOwl integration credentials for enrichment.
+type BookOwlConfig struct {
+	APIURL string
+	APIKey string
+}
+
 // Enricher looks up the knowledge base for matching incidents and attaches
 // the matched incident ID and suggested solution to new alerts.
 type Enricher struct {
-	logger *slog.Logger
+	logger        *slog.Logger
+	bookowlClient *bookowl.Client
 }
 
-// NewEnricher creates an Enricher.
-func NewEnricher(logger *slog.Logger) *Enricher {
-	return &Enricher{logger: logger}
+// NewEnricher creates an Enricher with an optional BookOwl client for runbook fallback.
+func NewEnricher(logger *slog.Logger, bookowlClient *bookowl.Client) *Enricher {
+	return &Enricher{logger: logger, bookowlClient: bookowlClient}
 }
 
 // Enrich attempts to find a matching incident for the alert by fingerprint,
-// falling back to full-text search on the alert title and description.
+// falling back to full-text search on the alert title and description,
+// then to BookOwl runbook search if configured.
 // If a match is found, the alert row is updated with the enrichment data.
-func (e *Enricher) Enrich(ctx context.Context, dbtx db.DBTX, alertID uuid.UUID, fingerprint, title string, description *string) EnrichResult {
+func (e *Enricher) Enrich(ctx context.Context, dbtx db.DBTX, alertID uuid.UUID, fingerprint, title string, description *string, bwCfg *BookOwlConfig) EnrichResult {
 	// 1. Try fingerprint match.
 	result, err := e.matchByFingerprint(ctx, dbtx, fingerprint)
 	if err != nil {
@@ -62,6 +71,20 @@ func (e *Enricher) Enrich(ctx context.Context, dbtx db.DBTX, alertID uuid.UUID, 
 			e.logger.Warn("failed to apply enrichment", "error", err, "alert_id", alertID)
 		}
 		return result
+	}
+
+	// 3. Fallback: search BookOwl runbooks if integration is configured.
+	if e.bookowlClient != nil && bwCfg != nil && bwCfg.APIURL != "" && bwCfg.APIKey != "" {
+		result, err = e.matchByBookOwlRunbook(ctx, bwCfg, searchQuery)
+		if err != nil {
+			e.logger.Warn("enrichment bookowl runbook search failed", "error", err, "alert_id", alertID)
+		}
+		if result.IsEnriched {
+			if err := e.applyEnrichment(ctx, dbtx, alertID, result); err != nil {
+				e.logger.Warn("failed to apply enrichment", "error", err, "alert_id", alertID)
+			}
+			return result
+		}
 	}
 
 	return EnrichResult{}
@@ -127,6 +150,32 @@ func (e *Enricher) matchByTextSearch(ctx context.Context, dbtx db.DBTX, searchQu
 	return e.buildEnrichResult(incidentID, "text_search", solution, runbookID, runbookContent), nil
 }
 
+// matchByBookOwlRunbook searches BookOwl's runbook API for a relevant runbook
+// matching the alert query. Returns the top result's content as the suggested solution.
+func (e *Enricher) matchByBookOwlRunbook(ctx context.Context, cfg *BookOwlConfig, searchQuery string) (EnrichResult, error) {
+	result, err := e.bookowlClient.ListRunbooks(ctx, cfg.APIURL, cfg.APIKey, searchQuery, 1, 0)
+	if err != nil {
+		return EnrichResult{}, fmt.Errorf("bookowl runbook search: %w", err)
+	}
+	if len(result.Items) == 0 {
+		return EnrichResult{}, nil
+	}
+
+	rb := result.Items[0]
+	// Fetch full runbook content for the suggested solution.
+	detail, err := e.bookowlClient.GetRunbook(ctx, cfg.APIURL, cfg.APIKey, rb.ID)
+	if err != nil {
+		return EnrichResult{}, fmt.Errorf("fetching bookowl runbook detail: %w", err)
+	}
+
+	return EnrichResult{
+		IsEnriched:        true,
+		SuggestedSolution: detail.ContentText,
+		RunbookURL:        rb.URL,
+		MatchMethod:       "bookowl_runbook",
+	}, nil
+}
+
 // buildEnrichResult constructs an EnrichResult from matched incident data.
 // If the incident has a linked runbook, the runbook content is appended to the
 // suggested solution and a RunbookURL is generated.
@@ -157,15 +206,24 @@ func (e *Enricher) buildEnrichResult(incidentID uuid.UUID, method string, soluti
 
 // applyEnrichment updates the alert row with the matched incident and solution.
 func (e *Enricher) applyEnrichment(ctx context.Context, dbtx db.DBTX, alertID uuid.UUID, result EnrichResult) error {
-	query := `UPDATE alerts
-		SET matched_incident_id = $2, suggested_solution = $3, updated_at = now()
-		WHERE id = $1`
-
 	var solution *string
 	if result.SuggestedSolution != "" {
 		solution = &result.SuggestedSolution
 	}
 
+	// BookOwl-only matches have no matched incident ID.
+	if result.MatchedIncidentID == uuid.Nil {
+		query := `UPDATE alerts SET suggested_solution = $2, updated_at = now() WHERE id = $1`
+		_, err := dbtx.Exec(ctx, query, alertID, solution)
+		if err != nil {
+			return fmt.Errorf("updating alert enrichment: %w", err)
+		}
+		return nil
+	}
+
+	query := `UPDATE alerts
+		SET matched_incident_id = $2, suggested_solution = $3, updated_at = now()
+		WHERE id = $1`
 	_, err := dbtx.Exec(ctx, query, alertID, result.MatchedIncidentID, solution)
 	if err != nil {
 		return fmt.Errorf("updating alert enrichment: %w", err)

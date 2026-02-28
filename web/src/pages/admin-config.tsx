@@ -52,6 +52,18 @@ export function AdminConfigPage() {
     queryFn: () => api.get<TenantConfigResponse>("/admin/config"),
   });
 
+  const { data: authConfig } = useQuery({
+    queryKey: ["auth-config"],
+    queryFn: async () => {
+      const res = await fetch("/auth/config");
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
+
+  const bookowlApiPlaceholder = authConfig?.bookowl_api_url || "http://owl-bookowl-api:8081/api/v1";
+
   const form = useMemo<ConfigForm>(() => {
     if (formOverride) return formOverride;
     if (!data) return emptyForm;
@@ -381,10 +393,10 @@ export function AdminConfigPage() {
                       <Input
                         value={form.bookowl_api_url}
                         onChange={(e) => setForm({ ...form, bookowl_api_url: e.target.value })}
-                        placeholder="http://localhost:8081/api/v1"
+                        placeholder={bookowlApiPlaceholder}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Base URL of the BookOwl API (e.g. http://localhost:8081/api/v1)
+                        Base URL of the BookOwl API (e.g. http://bookowl:8081). /api/v1 is appended automatically if missing.
                       </p>
                     </div>
                     <div>

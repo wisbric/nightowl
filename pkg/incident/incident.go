@@ -74,6 +74,7 @@ type Response struct {
 	RunbookID         *uuid.UUID `json:"runbook_id,omitempty"`
 	RunbookTitle      *string    `json:"runbook_title,omitempty"`
 	RunbookContent    *string    `json:"runbook_content,omitempty"`
+	PostMortemURL     *string    `json:"post_mortem_url,omitempty"`
 	ResolutionCount   int32      `json:"resolution_count"`
 	LastResolvedAt    *time.Time `json:"last_resolved_at,omitempty"`
 	LastResolvedBy    *uuid.UUID `json:"last_resolved_by,omitempty"`
@@ -136,6 +137,7 @@ type IncidentRow struct {
 	RootCause         *string
 	Solution          *string
 	RunbookID         pgtype.UUID
+	PostMortemURL     pgtype.Text
 	ResolutionCount   int32
 	LastResolvedAt    pgtype.Timestamptz
 	LastResolvedBy    pgtype.UUID
@@ -171,6 +173,10 @@ func (r *IncidentRow) ToResponse() Response {
 		id := r.RunbookID.Bytes
 		uid := uuid.UUID(id)
 		resp.RunbookID = &uid
+	}
+	if r.PostMortemURL.Valid {
+		s := r.PostMortemURL.String
+		resp.PostMortemURL = &s
 	}
 	if r.LastResolvedAt.Valid {
 		t := r.LastResolvedAt.Time

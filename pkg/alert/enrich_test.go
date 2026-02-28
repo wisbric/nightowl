@@ -53,7 +53,7 @@ func TestAlertRowToResponse_EnrichmentFields(t *testing.T) {
 }
 
 func TestNewEnricher(t *testing.T) {
-	e := NewEnricher(nil)
+	e := NewEnricher(nil, nil)
 	if e == nil {
 		t.Fatal("NewEnricher should return non-nil")
 	}

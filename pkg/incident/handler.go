@@ -43,6 +43,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Put("/", h.handleUpdate)
 		r.Delete("/", h.handleDelete)
 		r.Post("/merge", h.handleMerge)
+		r.Put("/post-mortem-url", h.handleSetPostMortemURL)
 		r.Get("/history", h.handleListHistory)
 	})
 	return r
@@ -286,6 +287,40 @@ func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
 	if h.audit != nil {
 		detail, _ := json.Marshal(map[string]string{"source_id": sourceID.String(), "target_id": targetID.String()})
 		h.audit.LogFromRequest(r, "merge", "incident", targetID, detail)
+	}
+
+	httpserver.Respond(w, http.StatusOK, resp)
+}
+
+func (h *Handler) handleSetPostMortemURL(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid incident ID")
+		return
+	}
+
+	var req struct {
+		URL string `json:"url" validate:"required,url"`
+	}
+	if !httpserver.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	svc := h.service(r)
+	resp, err := svc.SetPostMortemURL(r.Context(), id, req.URL, callerUUID(r))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpserver.RespondError(w, http.StatusNotFound, "not_found", "incident not found")
+			return
+		}
+		h.logger.Error("setting post-mortem URL", "error", err, "id", id)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to set post-mortem URL")
+		return
+	}
+
+	if h.audit != nil {
+		detail, _ := json.Marshal(map[string]string{"post_mortem_url": req.URL})
+		h.audit.LogFromRequest(r, "set_post_mortem_url", "incident", resp.ID, detail)
 	}
 
 	httpserver.Respond(w, http.StatusOK, resp)

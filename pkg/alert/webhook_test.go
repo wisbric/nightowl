@@ -331,7 +331,7 @@ func TestNormalizeGeneric_AgentNotAutoResolved(t *testing.T) {
 // --- Handler validation tests ---
 
 func newTestRouter() (*WebhookHandler, chi.Router) {
-	h := NewWebhookHandler(nil, nil, nil, nil, nil)
+	h := NewWebhookHandler(nil, nil, nil, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Mount("/webhooks", h.Routes())
 	return h, router

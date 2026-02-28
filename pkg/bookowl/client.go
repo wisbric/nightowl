@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	neturl "net/url"
 	"time"
 )
 
@@ -25,7 +26,7 @@ func NewClient() *Client {
 func (c *Client) ListRunbooks(ctx context.Context, apiURL, apiKey string, query string, limit, offset int) (*RunbookListResponse, error) {
 	url := fmt.Sprintf("%s/integration/runbooks?limit=%d&offset=%d", apiURL, limit, offset)
 	if query != "" {
-		url += "&q=" + query
+		url += "&q=" + neturl.QueryEscape(query)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

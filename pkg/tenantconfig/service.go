@@ -23,6 +23,16 @@ func NewService(pool *pgxpool.Pool, logger *slog.Logger) *Service {
 	return &Service{pool: pool, logger: logger}
 }
 
+// GetBookOwlConfig returns the BookOwl API URL and key for a tenant.
+// This implements alert.BookOwlConfigResolver for use by the enrichment pipeline.
+func (s *Service) GetBookOwlConfig(ctx context.Context, tenantID uuid.UUID) (apiURL, apiKey string, err error) {
+	cfg, err := s.Get(ctx, tenantID)
+	if err != nil {
+		return "", "", err
+	}
+	return cfg.BookOwlAPIURL, cfg.BookOwlAPIKey, nil
+}
+
 // Get returns the current tenant configuration.
 func (s *Service) Get(ctx context.Context, tenantID uuid.UUID) (*ConfigResponse, error) {
 	q := db.New(s.pool)
@@ -82,7 +92,7 @@ func (s *Service) Update(ctx context.Context, tenantID uuid.UUID, req UpdateRequ
 		TwilioSID:                  req.TwilioSID,
 		TwilioPhoneNumber:          req.TwilioPhoneNumber,
 		DefaultTimezone:            req.DefaultTimezone,
-		BookOwlAPIURL:              req.BookOwlAPIURL,
+		BookOwlAPIURL:              normalizeBookOwlURL(req.BookOwlAPIURL),
 		BookOwlAPIKey:              req.BookOwlAPIKey,
 	}
 

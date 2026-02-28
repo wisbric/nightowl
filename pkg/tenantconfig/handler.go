@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -181,6 +182,16 @@ type TestBookOwlResponse struct {
 	Count int    `json:"count,omitempty"`
 }
 
+// normalizeBookOwlURL ensures the URL includes the /api/v1 prefix.
+// Users often enter just the host (e.g. http://bookowl:8081) without /api/v1.
+func normalizeBookOwlURL(raw string) string {
+	u := strings.TrimRight(raw, "/")
+	if !strings.HasSuffix(u, "/api/v1") {
+		u += "/api/v1"
+	}
+	return u
+}
+
 func (h *Handler) handleTestBookOwl(w http.ResponseWriter, r *http.Request) {
 	var req TestBookOwlRequest
 	if !httpserver.DecodeAndValidate(w, r, &req) {
@@ -191,7 +202,8 @@ func (h *Handler) handleTestBookOwl(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Call BookOwl's integration runbooks endpoint with limit=1 to verify connection.
-	testURL := fmt.Sprintf("%s/integration/runbooks?limit=1", req.URL)
+	apiURL := normalizeBookOwlURL(req.URL)
+	testURL := fmt.Sprintf("%s/integration/runbooks?limit=1", apiURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, testURL, nil)
 	if err != nil {
 		httpserver.Respond(w, http.StatusOK, TestBookOwlResponse{OK: false, Error: "invalid URL"})

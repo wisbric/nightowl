@@ -174,11 +174,21 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 				oidcEnabled = localAdminHandler.CheckOIDCEnabled(r.Context(), tenant)
 			}
 		}
-		httpserver.Respond(w, http.StatusOK, auth.AuthConfigResponse{
-			OIDCEnabled:  oidcEnabled,
-			OIDCName:     "Sign in with SSO",
-			LocalEnabled: true,
-		})
+		resp := map[string]any{
+			"oidc_enabled":  oidcEnabled,
+			"oidc_name":     "Sign in with SSO",
+			"local_enabled": true,
+		}
+		if cfg.BookOwlURL != "" {
+			resp["bookowl_url"] = cfg.BookOwlURL
+		}
+		if cfg.TicketOwlURL != "" {
+			resp["ticketowl_url"] = cfg.TicketOwlURL
+		}
+		if cfg.BookOwlAPIURL != "" {
+			resp["bookowl_api_url"] = cfg.BookOwlAPIURL
+		}
+		httpserver.Respond(w, http.StatusOK, resp)
 	})
 
 	// Existing email/password login (for tenant users, not local admins).
@@ -218,14 +228,15 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	srv.APIRouter.Mount("/alerts", alertHandler.Routes())
 
 	dedup := alert.NewDeduplicator(rdb, logger, nightowlmetrics.AlertsDeduplicatedTotal)
-	enricher := alert.NewEnricher(logger)
+	enricher := alert.NewEnricher(logger, bookowl.NewClient())
 	webhookMetrics := &alert.WebhookMetrics{
 		ReceivedTotal:      nightowlmetrics.AlertsReceivedTotal,
 		ProcessingDuration: nightowlmetrics.AlertProcessingDuration,
 		KBHitsTotal:        nightowlmetrics.KBHitsTotal,
 		AgentResolvedTotal: nightowlmetrics.AlertsAgentResolvedTotal,
 	}
-	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics)
+	cfgSvc := tenantconfig.NewService(db, logger)
+	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics, cfgSvc)
 	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
 
 	rosterHandler := roster.NewHandler(logger, auditWriter)

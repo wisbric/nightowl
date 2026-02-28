@@ -11,3 +11,12 @@ data:
   METRICS_PATH: {{ .Values.config.metricsPath | quote }}
   MIGRATIONS_GLOBAL_DIR: {{ .Values.migrations.globalDir | quote }}
   MIGRATIONS_TENANT_DIR: {{ .Values.migrations.tenantDir | quote }}
+  {{- if .Values.config.bookowlUrl }}
+  NIGHTOWL_BOOKOWL_URL: {{ .Values.config.bookowlUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.ticketowlUrl }}
+  NIGHTOWL_TICKETOWL_URL: {{ .Values.config.ticketowlUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.bookowlApiUrl }}
+  NIGHTOWL_BOOKOWL_API_URL: {{ .Values.config.bookowlApiUrl | quote }}
+  {{- end }}

@@ -27,8 +27,8 @@ func NewStore(dbtx db.DBTX) *Store {
 // incidentColumns is the shared column list for incident queries (excludes search_vector).
 const incidentColumns = `id, title, fingerprints, severity, category, tags, services, clusters,
 	namespaces, symptoms, error_patterns, root_cause, solution, runbook_id,
-	resolution_count, last_resolved_at, last_resolved_by, avg_resolution_mins,
-	merged_into_id, created_by, created_at, updated_at`
+	post_mortem_url, resolution_count, last_resolved_at, last_resolved_by,
+	avg_resolution_mins, merged_into_id, created_by, created_at, updated_at`
 
 // scanIncidentRow scans a pgx.Row into an IncidentRow.
 func scanIncidentRow(row pgx.Row) (IncidentRow, error) {
@@ -37,7 +37,7 @@ func scanIncidentRow(row pgx.Row) (IncidentRow, error) {
 		&r.ID, &r.Title, &r.Fingerprints, &r.Severity, &r.Category,
 		&r.Tags, &r.Services, &r.Clusters, &r.Namespaces, &r.Symptoms,
 		&r.ErrorPatterns, &r.RootCause, &r.Solution, &r.RunbookID,
-		&r.ResolutionCount, &r.LastResolvedAt, &r.LastResolvedBy,
+		&r.PostMortemURL, &r.ResolutionCount, &r.LastResolvedAt, &r.LastResolvedBy,
 		&r.AvgResolutionMins, &r.MergedIntoID, &r.CreatedBy,
 		&r.CreatedAt, &r.UpdatedAt,
 	)
@@ -54,7 +54,7 @@ func scanIncidentRows(rows pgx.Rows) ([]IncidentRow, error) {
 			&r.ID, &r.Title, &r.Fingerprints, &r.Severity, &r.Category,
 			&r.Tags, &r.Services, &r.Clusters, &r.Namespaces, &r.Symptoms,
 			&r.ErrorPatterns, &r.RootCause, &r.Solution, &r.RunbookID,
-			&r.ResolutionCount, &r.LastResolvedAt, &r.LastResolvedBy,
+			&r.PostMortemURL, &r.ResolutionCount, &r.LastResolvedAt, &r.LastResolvedBy,
 			&r.AvgResolutionMins, &r.MergedIntoID, &r.CreatedBy,
 			&r.CreatedAt, &r.UpdatedAt,
 		); err != nil {
@@ -292,6 +292,15 @@ func (s *Store) GetRunbookSummary(ctx context.Context, id uuid.UUID) (*RunbookSu
 		return nil, err
 	}
 	return &rb, nil
+}
+
+// SetPostMortemURL updates the post_mortem_url field on an incident.
+func (s *Store) SetPostMortemURL(ctx context.Context, id uuid.UUID, url string) (IncidentRow, error) {
+	query := `UPDATE incidents SET post_mortem_url = $2, updated_at = now()
+	WHERE id = $1
+	RETURNING ` + incidentColumns
+	row := s.dbtx.QueryRow(ctx, query, id, url)
+	return scanIncidentRow(row)
 }
 
 // SetMergedInto marks the source incident as merged into the target.
