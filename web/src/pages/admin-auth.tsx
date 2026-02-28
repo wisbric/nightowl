@@ -16,6 +16,7 @@ interface OIDCConfig {
   client_secret: string;
   enabled: boolean;
   tested_at?: string;
+  source?: string; // "environment" when configured via env vars
 }
 
 interface OIDCTestResult {
@@ -139,6 +140,11 @@ export function AdminAuthPage() {
                 <LoadingSpinner size="sm" />
               ) : (
                 <>
+                  {data?.source === "environment" && (
+                    <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent">
+                      OIDC is configured via environment variables (Helm/deployment). To override per-tenant, fill in the fields below and save.
+                    </div>
+                  )}
                   <div>
                     <label className="text-sm font-medium">Issuer URL</label>
                     <Input

@@ -269,6 +269,10 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	// OIDC admin config endpoints (admin role required).
 	oidcAdminHandler := auth.NewOIDCAdminHandler(authStore, logger, sessionSecret)
+	oidcAdminHandler.SetEnvDefaults(auth.OIDCEnvDefaults{
+		IssuerURL: cfg.OIDCIssuerURL,
+		ClientID:  cfg.OIDCClientID,
+	})
 	srv.APIRouter.Route("/admin/oidc", func(r chi.Router) {
 		r.Use(auth.RequireRole(auth.RoleAdmin))
 		r.Get("/config", oidcAdminHandler.HandleGetOIDCConfig)
