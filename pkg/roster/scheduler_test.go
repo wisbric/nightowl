@@ -86,9 +86,10 @@ func TestPickSecondary_ExcludesPrimary(t *testing.T) {
 		{UserID: u2, DisplayName: "B"},
 		{UserID: u3, DisplayName: "C"},
 	}
-	counts := map[uuid.UUID]int{u1: 0, u2: 0, u3: 0}
+	primaryCounts := map[uuid.UUID]int{u1: 0, u2: 0, u3: 0}
+	secondaryCounts := map[uuid.UUID]int{u1: 0, u2: 0, u3: 0}
 
-	got := pickSecondary(members, counts, u1)
+	got := pickSecondary(members, primaryCounts, secondaryCounts, u1)
 	if got == nil {
 		t.Fatal("expected non-nil secondary")
 	}

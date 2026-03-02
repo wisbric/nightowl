@@ -537,6 +537,24 @@ func (s *Store) CountSecondaryWeeks(ctx context.Context, rosterID, userID uuid.U
 	return count, err
 }
 
+// CountPrimaryWeeksBefore counts primary weeks before a given date (for fair regeneration).
+func (s *Store) CountPrimaryWeeksBefore(ctx context.Context, rosterID, userID uuid.UUID, before time.Time) (int, error) {
+	var count int
+	err := s.dbtx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM roster_schedule WHERE roster_id = $1 AND primary_user_id = $2 AND week_start < $3`,
+		rosterID, userID, before).Scan(&count)
+	return count, err
+}
+
+// CountSecondaryWeeksBefore counts secondary weeks before a given date (for fair regeneration).
+func (s *Store) CountSecondaryWeeksBefore(ctx context.Context, rosterID, userID uuid.UUID, before time.Time) (int, error) {
+	var count int
+	err := s.dbtx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM roster_schedule WHERE roster_id = $1 AND secondary_user_id = $2 AND week_start < $3`,
+		rosterID, userID, before).Scan(&count)
+	return count, err
+}
+
 // ListOverridesInRange lists overrides for a roster within a time range.
 func (s *Store) ListOverridesInRange(ctx context.Context, rosterID uuid.UUID, from, to time.Time) ([]OverrideResponse, error) {
 	query := `SELECT ro.id, ro.roster_id, ro.user_id, COALESCE(u.display_name, ro.user_id::text),

@@ -29,11 +29,15 @@ func (s *Service) GenerateSchedule(ctx context.Context, rosterID uuid.UUID, from
 	// Align 'from' to the roster's handoff day.
 	weekStart := alignToHandoffDay(from, roster.HandoffDay)
 
-	// Build primary-weeks-served count from all existing schedule entries.
+	// Build duty counts from schedule entries BEFORE the generation window only.
+	// This avoids inflated counts from rows we're about to overwrite.
 	primaryCount := make(map[uuid.UUID]int)
+	secondaryCount := make(map[uuid.UUID]int)
 	for _, m := range members {
-		count, _ := s.store.CountPrimaryWeeks(ctx, rosterID, m.UserID)
-		primaryCount[m.UserID] = count
+		pc, _ := s.store.CountPrimaryWeeksBefore(ctx, rosterID, m.UserID, weekStart)
+		primaryCount[m.UserID] = pc
+		sc, _ := s.store.CountSecondaryWeeksBefore(ctx, rosterID, m.UserID, weekStart)
+		secondaryCount[m.UserID] = sc
 	}
 
 	// Load existing schedule for the range so we can skip locked weeks.
@@ -93,7 +97,7 @@ func (s *Service) GenerateSchedule(ctx context.Context, rosterID uuid.UUID, from
 		primary := pickPrimary(members, primaryCount, lastPrimary, consecutiveCount, roster.MaxConsecutiveWeeks)
 		var secondary *uuid.UUID
 		if len(members) > 1 && primary != nil {
-			secondary = pickSecondary(members, primaryCount, *primary)
+			secondary = pickSecondary(members, primaryCount, secondaryCount, *primary)
 		}
 
 		entry, err := s.store.UpsertScheduleWeek(ctx, rosterID, ws, we,
@@ -112,6 +116,9 @@ func (s *Service) GenerateSchedule(ctx context.Context, rosterID uuid.UUID, from
 				lastPrimary = primary
 				consecutiveCount = 1
 			}
+		}
+		if secondary != nil {
+			secondaryCount[*secondary]++
 		}
 	}
 
@@ -168,21 +175,21 @@ func pickPrimary(members []MemberResponse, primaryCount map[uuid.UUID]int,
 	return best
 }
 
-// pickSecondary selects the member with the fewest primary weeks served,
-// excluding the primary.
-func pickSecondary(members []MemberResponse, primaryCount map[uuid.UUID]int, primaryUID uuid.UUID) *uuid.UUID {
+// pickSecondary selects the member with the fewest total duty weeks (primary + secondary),
+// excluding the current week's primary.
+func pickSecondary(members []MemberResponse, primaryCount, secondaryCount map[uuid.UUID]int, primaryUID uuid.UUID) *uuid.UUID {
 	var best *uuid.UUID
-	bestCount := -1
+	bestTotal := -1
 
 	for _, m := range members {
 		if m.UserID == primaryUID {
 			continue
 		}
-		count := primaryCount[m.UserID]
-		if best == nil || count < bestCount {
+		total := primaryCount[m.UserID] + secondaryCount[m.UserID]
+		if best == nil || total < bestTotal {
 			id := m.UserID
 			best = &id
-			bestCount = count
+			bestTotal = total
 		}
 	}
 	return best
