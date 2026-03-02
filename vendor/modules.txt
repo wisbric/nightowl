@@ -158,7 +158,7 @@ github.com/slack-go/slack/internal/errorsx
 github.com/slack-go/slack/internal/timex
 github.com/slack-go/slack/slackevents
 github.com/slack-go/slack/slackutilsx
-# github.com/wisbric/core v0.1.4-0.20260227121704-38a5448baa83
+# github.com/wisbric/core v0.1.4-0.20260302084500-d306f9cc45fb
 ## explicit; go 1.24.0
 github.com/wisbric/core/pkg/auth
 github.com/wisbric/core/pkg/authadapter
