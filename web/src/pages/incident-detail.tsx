@@ -16,7 +16,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/u
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatRelativeTime } from "@/lib/utils";
 import type {
-  Incident, IncidentHistoryEntry,
+  Incident, IncidentHistoryEntry, IncidentsResponse,
   BookOwlStatusResponse, BookOwlRunbookListResponse, BookOwlPostMortemResponse,
 } from "@/types/api";
 import { BookOpen, ExternalLink, FileText } from "lucide-react";
@@ -110,9 +110,16 @@ export function IncidentDetailPage() {
     },
   });
 
+  // Fetch incidents for the merge dropdown (only when dialog is open).
+  const { data: mergeIncidents } = useQuery({
+    queryKey: ["incidents", "merge-candidates"],
+    queryFn: () => api.get<IncidentsResponse>("/incidents?limit=100"),
+    enabled: mergeOpen,
+  });
+
   const mergeMutation = useMutation({
     mutationFn: (mergeTargetId: string) =>
-      api.post(`/incidents/${incidentId}/merge`, { target_id: mergeTargetId }),
+      api.post(`/incidents/${mergeTargetId}/merge`, { source_id: incidentId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
@@ -297,15 +304,23 @@ export function IncidentDetailPage() {
             </DialogHeader>
             <DialogContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Merge this incident into another. The target incident will absorb this incident's data.
+                Merge this incident into another. The selected target incident will absorb this incident's data.
               </p>
               <div>
-                <label className="text-sm font-medium">Target Incident ID</label>
-                <Input
+                <label className="text-sm font-medium">Target Incident</label>
+                <Select
                   value={targetId}
                   onChange={(e) => setTargetId(e.target.value)}
-                  placeholder="Enter target incident ID"
-                />
+                >
+                  <option value="">Select an incident...</option>
+                  {(mergeIncidents?.items ?? [])
+                    .filter((inc) => inc.id !== incidentId)
+                    .map((inc) => (
+                      <option key={inc.id} value={inc.id}>
+                        [{inc.severity}] {inc.title}
+                      </option>
+                    ))}
+                </Select>
               </div>
               {mergeMutation.isError && (
                 <p className="text-sm text-destructive">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "@tanstack/react-router";
+import { useParams, Link, useNavigate } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -113,6 +113,8 @@ export function RosterDetailPage() {
   const [regenerateWeeks, setRegenerateWeeks] = useState("12");
   const [deactivateConfirm, setDeactivateConfirm] = useState<{ userId: string; name: string } | null>(null);
   const [editSettings, setEditSettings] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const navigate = useNavigate();
 
   const { data: roster, isLoading } = useQuery({
     queryKey: ["roster", rosterId],
@@ -262,6 +264,14 @@ export function RosterDetailPage() {
     },
   });
 
+  const deleteRosterMutation = useMutation({
+    mutationFn: () => api.delete(`/rosters/${rosterId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rosters"] });
+      navigate({ to: "/rosters" });
+    },
+  });
+
   // --- Create form ---
 
   if (isNew) {
@@ -386,6 +396,15 @@ export function RosterDetailPage() {
             <Calendar className="h-4 w-4" />
             Export iCal
           </a>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -882,6 +901,34 @@ export function RosterDetailPage() {
             onClick={() => updateRosterMutation.mutate(rosterForm)}
           >
             {updateRosterMutation.isPending ? "Saving..." : "Save Settings"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Delete Roster Confirmation */}
+      <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+        <DialogHeader>
+          <DialogTitle>Delete Roster</DialogTitle>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-medium text-foreground">{roster.name}</span>?
+            This will permanently remove the roster, all schedule entries, members, and overrides.
+          </p>
+          {deleteRosterMutation.isError && (
+            <p className="text-sm text-destructive mt-2">
+              {deleteRosterMutation.error instanceof Error ? deleteRosterMutation.error.message : "Delete failed"}
+            </p>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            disabled={deleteRosterMutation.isPending}
+            onClick={() => deleteRosterMutation.mutate()}
+          >
+            {deleteRosterMutation.isPending ? "Deleting..." : "Delete Roster"}
           </Button>
         </DialogFooter>
       </Dialog>
