@@ -66,7 +66,7 @@ func (s *Store) CreateRoster(ctx context.Context, r CreateRosterRequest) (Roster
 		weeksAhead, maxConsec, r.IsFollowTheSun,
 		uuidToPgtype(r.LinkedRosterID),
 		parseOptionalTime(r.ActiveHoursStart), parseOptionalTime(r.ActiveHoursEnd),
-		uuidToPgtype(r.EscalationPolicyID), endDate, true,
+		uuidToPgtype(r.EscalationPolicyID), endDate,
 	))
 }
 
