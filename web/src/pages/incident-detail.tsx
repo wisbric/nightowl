@@ -19,7 +19,7 @@ import type {
   Incident, IncidentHistoryEntry, IncidentsResponse,
   BookOwlStatusResponse, BookOwlRunbookListResponse, BookOwlPostMortemResponse,
 } from "@/types/api";
-import { BookOpen, ExternalLink, FileText } from "lucide-react";
+import { BookOpen, ExternalLink, FileText, GitMerge } from "lucide-react";
 
 interface IncidentForm {
   title: string;
@@ -32,6 +32,58 @@ interface IncidentForm {
   services: string;
   tags: string;
   error_patterns: string;
+}
+
+function HistoryDiff({ changeType, diff }: { changeType: string; diff: Record<string, unknown> }) {
+  if (changeType === "created") {
+    const title = diff.title as string | undefined;
+    const severity = diff.severity as string | undefined;
+    return <span className="text-muted-foreground">Incident created{title ? `: ${title}` : ""}{severity ? ` (${severity})` : ""}</span>;
+  }
+
+  if (changeType === "merged") {
+    const sourceId = diff.merged_source_id as string | undefined;
+    const targetId = diff.merged_into_id as string | undefined;
+    const alerts = diff.reassigned_alerts as number | undefined;
+    if (targetId) {
+      return (
+        <span className="text-muted-foreground">
+          Merged into <Link to="/incidents/$incidentId" params={{ incidentId: targetId }} className="text-accent hover:underline">{targetId.slice(0, 8)}...</Link>
+        </span>
+      );
+    }
+    return (
+      <span className="text-muted-foreground">
+        Absorbed incident <Link to="/incidents/$incidentId" params={{ incidentId: sourceId! }} className="text-accent hover:underline">{sourceId!.slice(0, 8)}...</Link>
+        {alerts ? ` (${alerts} alert${alerts !== 1 ? "s" : ""} reassigned)` : ""}
+      </span>
+    );
+  }
+
+  if (changeType === "archived") {
+    return <span className="text-muted-foreground">Incident archived</span>;
+  }
+
+  // "updated" — show changed fields
+  const fields = Object.entries(diff);
+  if (fields.length === 0) return <span className="text-muted-foreground">No changes recorded</span>;
+  return (
+    <div className="space-y-1">
+      {fields.map(([field, val]) => {
+        const change = val as { old?: unknown; new?: unknown } | undefined;
+        const oldStr = change?.old != null ? String(change.old) : "\u2014";
+        const newStr = change?.new != null ? String(change.new) : "\u2014";
+        return (
+          <div key={field}>
+            <span className="font-medium">{field.replace(/_/g, " ")}</span>{": "}
+            <span className="text-muted-foreground line-through">{oldStr.length > 60 ? oldStr.slice(0, 60) + "..." : oldStr}</span>
+            {" \u2192 "}
+            <span>{newStr.length > 60 ? newStr.slice(0, 60) + "..." : newStr}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function IncidentDetailPage() {
@@ -52,6 +104,12 @@ export function IncidentDetailPage() {
   const { data: history } = useQuery({
     queryKey: ["incident-history", incidentId],
     queryFn: () => api.get<IncidentHistoryEntry[]>(`/incidents/${incidentId}/history`),
+    enabled: !isNew,
+  });
+
+  const { data: mergedSources } = useQuery({
+    queryKey: ["incident-merged-sources", incidentId],
+    queryFn: () => api.get<Incident[]>(`/incidents/${incidentId}/merged-sources`),
     enabled: !isNew,
   });
 
@@ -124,6 +182,7 @@ export function IncidentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-history", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incident-merged-sources"] });
       setMergeOpen(false);
       setTargetId("");
     },
@@ -341,6 +400,22 @@ export function IncidentDetailPage() {
             </DialogContent>
           </Dialog>
 
+          {incident.merged_into_id && (
+            <div className="rounded-md border border-accent/30 bg-accent/5 p-3 flex items-center gap-2">
+              <GitMerge className="h-4 w-4 text-accent flex-shrink-0" />
+              <span className="text-sm">
+                This incident was merged into{" "}
+                <Link
+                  to="/incidents/$incidentId"
+                  params={{ incidentId: incident.merged_into_id }}
+                  className="text-accent hover:underline font-medium"
+                >
+                  {incident.merged_into_id.slice(0, 8)}...
+                </Link>
+              </span>
+            </div>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Symptoms</CardTitle></CardHeader>
@@ -412,39 +487,77 @@ export function IncidentDetailPage() {
             Created {formatRelativeTime(incident.created_at)} &middot; Updated {formatRelativeTime(incident.updated_at)}
           </div>
 
-          {/* History section */}
-          <Card>
-            <CardHeader><CardTitle>History</CardTitle></CardHeader>
-            <CardContent>
-              {history && history.length > 0 ? (
+          {/* Merged Incidents section */}
+          {mergedSources && mergedSources.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <GitMerge className="h-4 w-4 text-accent" />
+                  <CardTitle>Merged Incidents</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Field</TableHead>
-                      <TableHead>Old Value</TableHead>
-                      <TableHead>New Value</TableHead>
-                      <TableHead>Changed By</TableHead>
-                      <TableHead>When</TableHead>
+                      <TableHead>Incident</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Merged</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {history.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium text-sm">{entry.field}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                          {entry.old_value || "\u2014"}
+                    {mergedSources.map((src) => (
+                      <TableRow key={src.id}>
+                        <TableCell>
+                          <Link
+                            to="/incidents/$incidentId"
+                            params={{ incidentId: src.id }}
+                            className="text-sm font-medium hover:text-accent transition-colors"
+                          >
+                            {src.title}
+                          </Link>
                         </TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate">
-                          {entry.new_value || "\u2014"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{entry.changed_by}</TableCell>
+                        <TableCell><SeverityBadge severity={src.severity} /></TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{src.category || "\u2014"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {formatRelativeTime(entry.created_at)}
+                          {formatRelativeTime(src.updated_at)}
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* History section */}
+          <Card>
+            <CardHeader><CardTitle>History</CardTitle></CardHeader>
+            <CardContent>
+              {history && history.length > 0 ? (
+                <div className="space-y-3">
+                  {history.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-3 text-sm border-b border-border pb-3 last:border-0 last:pb-0">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <Badge variant={
+                          entry.change_type === "created" ? "default" :
+                          entry.change_type === "merged" ? "secondary" :
+                          entry.change_type === "archived" ? "destructive" :
+                          "outline"
+                        }>
+                          {entry.change_type}
+                        </Badge>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <HistoryDiff changeType={entry.change_type} diff={entry.diff} />
+                      </div>
+                      <span className="text-muted-foreground whitespace-nowrap flex-shrink-0">
+                        {formatRelativeTime(entry.created_at)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No history recorded yet.</p>
               )}

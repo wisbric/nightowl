@@ -214,6 +214,19 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, userID pgtype.UUID) 
 	return nil
 }
 
+// ListMergedSources returns the incidents that were merged into the given target.
+func (s *Service) ListMergedSources(ctx context.Context, targetID uuid.UUID) ([]Response, error) {
+	rows, err := s.store.ListMergedSources(ctx, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("listing merged sources: %w", err)
+	}
+	items := make([]Response, 0, len(rows))
+	for i := range rows {
+		items = append(items, rows[i].ToResponse())
+	}
+	return items, nil
+}
+
 // Merge merges the source incident into the target incident.
 // Combined fields: fingerprints, services, tags, clusters, namespaces, error_patterns.
 // The longer solution wins. Source is marked as merged into target.

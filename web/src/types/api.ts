@@ -87,6 +87,7 @@ export interface Incident {
   runbook_content?: string | null;
   post_mortem_url?: string | null;
   resolution_count: number;
+  merged_into_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -297,10 +298,9 @@ export interface RunbooksResponse {
 export interface IncidentHistoryEntry {
   id: string;
   incident_id: string;
-  field: string;
-  old_value: string;
-  new_value: string;
-  changed_by: string;
+  changed_by?: string;
+  change_type: string; // "created" | "updated" | "merged" | "archived"
+  diff: Record<string, unknown>;
   created_at: string;
 }
 

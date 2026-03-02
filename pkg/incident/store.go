@@ -317,6 +317,19 @@ func (s *Store) SetMergedInto(ctx context.Context, sourceID, targetID uuid.UUID)
 	return nil
 }
 
+// ListMergedSources returns incidents that were merged into the given target incident.
+// It excludes self-references (soft-deleted/archived incidents).
+func (s *Store) ListMergedSources(ctx context.Context, targetID uuid.UUID) ([]IncidentRow, error) {
+	query := `SELECT ` + incidentColumns + ` FROM incidents
+	WHERE merged_into_id = $1 AND id != $1
+	ORDER BY updated_at DESC`
+	rows, err := s.dbtx.Query(ctx, query, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("listing merged sources: %w", err)
+	}
+	return scanIncidentRows(rows)
+}
+
 // ReassignAlerts updates all alerts that reference the source incident to point to the target.
 func (s *Store) ReassignAlerts(ctx context.Context, sourceID, targetID uuid.UUID) (int64, error) {
 	query := `UPDATE alerts SET matched_incident_id = $2, updated_at = now()

@@ -43,6 +43,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Put("/", h.handleUpdate)
 		r.Delete("/", h.handleDelete)
 		r.Post("/merge", h.handleMerge)
+		r.Get("/merged-sources", h.handleListMergedSources)
 		r.Put("/post-mortem-url", h.handleSetPostMortemURL)
 		r.Get("/history", h.handleListHistory)
 	})
@@ -246,6 +247,24 @@ func (h *Handler) handleListHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpserver.Respond(w, http.StatusOK, entries)
+}
+
+func (h *Handler) handleListMergedSources(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpserver.RespondError(w, http.StatusBadRequest, "bad_request", "invalid incident ID")
+		return
+	}
+
+	svc := h.service(r)
+	items, err := svc.ListMergedSources(r.Context(), id)
+	if err != nil {
+		h.logger.Error("listing merged sources", "error", err, "id", id)
+		httpserver.RespondError(w, http.StatusInternalServerError, "internal_error", "failed to list merged sources")
+		return
+	}
+
+	httpserver.Respond(w, http.StatusOK, items)
 }
 
 func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
