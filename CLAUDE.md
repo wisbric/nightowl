@@ -15,6 +15,9 @@ All design decisions are captured in `docs/`. Always read the relevant spec befo
 - `docs/05-tasks.md` — Implementation task breakdown with completion status
 - `docs/06-branding.md` — NightOwl branding, design system, color palette, typography
 - `docs/07-deployment.md` — CI/CD pipeline, container builds, Helm deployment guide
+- `docs/08-roster-v2.md` — Roster v2: explicit weekly schedule management (replaced calculated rotation model)
+- `docs/09-messaging.md` — Messaging integrations (Slack, Mattermost, email, SMS)
+- `docs/nightowl-10-login-and-profile.md` — Login, local admin, user profiles
 
 ## Branding
 

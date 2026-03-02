@@ -22,7 +22,7 @@ NightOwl is an incident knowledge base, alert management, on-call roster, and es
 
 - **Incident Knowledge Base** — full-text search, merge, history tracking, and runbook linking
 - **Alert Ingestion** — webhook receivers for Alertmanager, Keep, and generic sources with Redis-backed deduplication
-- **On-Call Rosters** — daily/weekly/custom rotations, follow-the-sun, overrides, and iCal export
+- **On-Call Rosters** — explicit weekly schedules, follow-the-sun, overrides, fairness tracking, and iCal export
 - **Escalation Policies** — multi-tier escalation with Slack, SMS, and phone notifications, plus dry-run simulation
 - **Runbooks** — Markdown runbooks with templates, linked directly to incidents
 - **Multi-Tenancy** — schema-per-tenant PostgreSQL isolation
@@ -109,6 +109,9 @@ Full interactive documentation is available at [`/api/docs`](http://localhost:80
 | [Tasks](docs/05-tasks.md) | Implementation task breakdown |
 | [Branding](docs/06-branding.md) | Design system, colors, typography |
 | [Deployment](docs/07-deployment.md) | CI/CD, containers, Helm charts |
+| [Roster V2](docs/08-roster-v2.md) | Explicit weekly schedule management |
+| [Messaging](docs/09-messaging.md) | Slack, Mattermost, email, SMS integrations |
+| [Login & Profile](docs/nightowl-10-login-and-profile.md) | Login, local admin, user profiles |
 | [API Reference](docs/api/openapi.yaml) | OpenAPI 3.0.3 specification |
 
 ---
