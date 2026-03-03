@@ -247,7 +247,7 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 	escalationHandler := escalation.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/escalation-policies", escalationHandler.Routes())
 
-	alertGroupHandler := alertgroup.NewHandler(logger, auditWriter)
+	alertGroupHandler := alertgroup.NewHandler(logger, auditWriter, grouper)
 	srv.APIRouter.Mount("/alert-groups", alertGroupHandler.Routes())
 
 	twilioHandler := integration.NewTwilioHandler(logger)

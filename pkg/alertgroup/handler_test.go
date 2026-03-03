@@ -14,7 +14,7 @@ import (
 // and respond to basic requests without panicking.
 func TestHandlerRoutes(t *testing.T) {
 	logger := slog.Default()
-	h := NewHandler(logger, nil)
+	h := NewHandler(logger, nil, nil)
 	router := h.Routes()
 
 	// Verify the router was created successfully.
@@ -132,7 +132,7 @@ func TestGroupResponse_JSON(t *testing.T) {
 // when no tenant connection is available (as expected).
 func TestHandlerListRules_NoTenant(t *testing.T) {
 	logger := slog.Default()
-	h := NewHandler(logger, nil)
+	h := NewHandler(logger, nil, nil)
 
 	// Without tenant context, this will panic — we verify the handler
 	// setup works but can't test full HTTP cycle without a DB.

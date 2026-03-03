@@ -3,6 +3,7 @@ package alertgroup
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -82,4 +83,60 @@ func (e *Evaluator) Evaluate(ctx context.Context, dbtx db.DBTX, alertID uuid.UUI
 	}
 
 	return alert.AlertGroupResult{}
+}
+
+// BackfillRule evaluates all ungrouped firing alerts against the given rule,
+// assigning matching alerts to groups. Called after rule create/update so
+// existing alerts are grouped retroactively.
+func (e *Evaluator) BackfillRule(ctx context.Context, dbtx db.DBTX, rule RuleResponse) (int, error) {
+	store := NewStore(dbtx)
+
+	if !rule.IsEnabled {
+		return 0, nil
+	}
+
+	alerts, err := store.ListUngroupedAlerts(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("listing ungrouped alerts: %w", err)
+	}
+
+	grouped := 0
+	for _, a := range alerts {
+		var labelMap map[string]string
+		if err := json.Unmarshal(a.Labels, &labelMap); err != nil {
+			continue
+		}
+
+		if !matchAlert(rule.Matchers, labelMap) {
+			continue
+		}
+
+		groupByLabels := extractGroupByLabels(rule.GroupBy, labelMap)
+		keyHash := computeGroupKeyHash(groupByLabels)
+		title := computeGroupTitle(groupByLabels)
+		keyLabelsJSON, _ := json.Marshal(groupByLabels)
+
+		groupID, err := store.FindOrCreateGroup(ctx, rule.ID, keyHash, title, keyLabelsJSON)
+		if err != nil {
+			e.logger.Error("backfill: failed to find/create group", "error", err, "alert_id", a.ID)
+			continue
+		}
+
+		if err := store.AssignAlertToGroup(ctx, a.ID, groupID, a.Severity); err != nil {
+			e.logger.Error("backfill: failed to assign alert", "error", err, "alert_id", a.ID)
+			continue
+		}
+
+		grouped++
+	}
+
+	if grouped > 0 {
+		e.logger.Info("backfilled existing alerts into rule",
+			"rule_id", rule.ID,
+			"rule_name", rule.Name,
+			"grouped", grouped,
+		)
+	}
+
+	return grouped, nil
 }

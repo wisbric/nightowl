@@ -70,6 +70,13 @@ type GroupResponse struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+// UngroupedAlert is a lightweight projection of an alert for backfill evaluation.
+type UngroupedAlert struct {
+	ID       uuid.UUID       `json:"id"`
+	Severity string          `json:"severity"`
+	Labels   json.RawMessage `json:"labels"`
+}
+
 // marshalMatchers marshals matchers to JSON for storage.
 func marshalMatchers(matchers []Matcher) json.RawMessage {
 	if matchers == nil {

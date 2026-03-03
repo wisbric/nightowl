@@ -88,6 +88,26 @@ func (s *Store) DeleteRule(ctx context.Context, id uuid.UUID) error {
 	return s.q.DeleteAlertGroupingRule(ctx, id)
 }
 
+// ListUngroupedAlerts returns all firing alerts that are not yet assigned to a group.
+func (s *Store) ListUngroupedAlerts(ctx context.Context) ([]UngroupedAlert, error) {
+	query := `SELECT id, severity, labels FROM alerts WHERE alert_group_id IS NULL AND status = 'firing' ORDER BY created_at`
+	rows, err := s.dbtx.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("listing ungrouped alerts: %w", err)
+	}
+	defer rows.Close()
+
+	var results []UngroupedAlert
+	for rows.Next() {
+		var a UngroupedAlert
+		if err := rows.Scan(&a.ID, &a.Severity, &a.Labels); err != nil {
+			return nil, fmt.Errorf("scanning ungrouped alert: %w", err)
+		}
+		results = append(results, a)
+	}
+	return results, rows.Err()
+}
+
 // --- Group operations ---
 
 // FindOrCreateGroup upserts an alert group for the given rule and key hash.

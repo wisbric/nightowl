@@ -20,13 +20,14 @@ import (
 
 // Handler provides HTTP handlers for the alert grouping API.
 type Handler struct {
-	logger *slog.Logger
-	audit  *audit.Writer
+	logger    *slog.Logger
+	audit     *audit.Writer
+	evaluator *Evaluator
 }
 
 // NewHandler creates an alertgroup Handler.
-func NewHandler(logger *slog.Logger, audit *audit.Writer) *Handler {
-	return &Handler{logger: logger, audit: audit}
+func NewHandler(logger *slog.Logger, audit *audit.Writer, evaluator *Evaluator) *Handler {
+	return &Handler{logger: logger, audit: audit, evaluator: evaluator}
 }
 
 // Routes returns a chi.Router with alert grouping routes mounted.
@@ -88,6 +89,16 @@ func (h *Handler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 	if h.audit != nil {
 		detail, _ := json.Marshal(map[string]string{"name": resp.Name})
 		h.audit.LogFromRequest(r, "create", "alert_grouping_rule", resp.ID, detail)
+	}
+
+	// Backfill existing ungrouped alerts against the new rule.
+	if h.evaluator != nil {
+		conn := tenant.ConnFromContext(r.Context())
+		if n, err := h.evaluator.BackfillRule(r.Context(), conn, resp); err != nil {
+			h.logger.Error("backfill after create failed", "error", err, "rule_id", resp.ID)
+		} else if n > 0 {
+			h.logger.Info("backfilled alerts on rule create", "rule_id", resp.ID, "count", n)
+		}
 	}
 
 	httpserver.Respond(w, http.StatusCreated, resp)
@@ -170,6 +181,16 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	if h.audit != nil {
 		detail, _ := json.Marshal(map[string]string{"name": resp.Name})
 		h.audit.LogFromRequest(r, "update", "alert_grouping_rule", resp.ID, detail)
+	}
+
+	// Backfill existing ungrouped alerts against the updated rule.
+	if h.evaluator != nil {
+		conn := tenant.ConnFromContext(r.Context())
+		if n, err := h.evaluator.BackfillRule(r.Context(), conn, resp); err != nil {
+			h.logger.Error("backfill after update failed", "error", err, "rule_id", resp.ID)
+		} else if n > 0 {
+			h.logger.Info("backfilled alerts on rule update", "rule_id", resp.ID, "count", n)
+		}
 	}
 
 	httpserver.Respond(w, http.StatusOK, resp)
