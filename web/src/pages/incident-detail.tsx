@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "@tanstack/react-router";
+import { useParams, Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
@@ -19,7 +19,7 @@ import type {
   Incident, IncidentHistoryEntry, IncidentsResponse,
   BookOwlStatusResponse, BookOwlRunbookListResponse, BookOwlPostMortemResponse,
 } from "@/types/api";
-import { BookOpen, ExternalLink, FileText, GitMerge } from "lucide-react";
+import { BookOpen, ExternalLink, FileText, GitMerge, Trash2 } from "lucide-react";
 
 interface IncidentForm {
   title: string;
@@ -90,10 +90,12 @@ export function IncidentDetailPage() {
   const { incidentId } = useParams({ strict: false }) as { incidentId: string };
   const isNew = incidentId === "new";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(isNew);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
   const [postMortemCreating, setPostMortemCreating] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ["incident", incidentId],
@@ -215,6 +217,14 @@ export function IncidentDetailPage() {
     },
     onError: () => {
       setPostMortemCreating(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/incidents/${incidentId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      navigate({ to: "/incidents" });
     },
   });
 
@@ -346,6 +356,14 @@ export function IncidentDetailPage() {
                   </Button>
                 </a>
               )}
+              <Button
+                variant="outline"
+                className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete
+              </Button>
               <Button variant="outline" onClick={() => setMergeOpen(true)}>Merge</Button>
               <Button onClick={() => setEditing(true)}>Edit</Button>
             </div>
@@ -395,6 +413,32 @@ export function IncidentDetailPage() {
                   disabled={mergeMutation.isPending || !targetId.trim()}
                 >
                   {mergeMutation.isPending ? "Merging..." : "Merge"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+            <DialogHeader>
+              <DialogTitle>Delete Incident</DialogTitle>
+            </DialogHeader>
+            <DialogContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to delete <strong>{incident.title}</strong>? This action cannot be undone.
+              </p>
+              {deleteMutation.isError && (
+                <p className="text-sm text-destructive">
+                  {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Delete failed"}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteMutation.mutate()}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? "Deleting..." : "Delete"}
                 </Button>
               </div>
             </DialogContent>

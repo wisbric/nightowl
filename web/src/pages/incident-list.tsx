@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
@@ -10,13 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Dialog, DialogHeader, DialogTitle, DialogContent } from "@/components/ui/dialog";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Incident, IncidentsResponse, SearchResponse, SearchResult } from "@/types/api";
-import { Search, Download, BookOpen } from "lucide-react";
+import { Search, Download, BookOpen, Trash2, GitMerge, X } from "lucide-react";
 
 interface SearchRow {
   incident: Incident;
@@ -29,13 +30,57 @@ interface SearchRow {
 
 export function IncidentListPage() {
   useTitle("Incidents");
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   useHotkey("/", useCallback(() => searchRef.current?.focus(), []));
 
   const isSearch = search.length >= 2;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids: string[]) => {
+    setSelectedIds((prev) => {
+      if (ids.every((id) => prev.has(id))) return new Set();
+      return new Set(ids);
+    });
+  };
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: () => Promise.all([...selectedIds].map((id) => api.delete(`/incidents/${id}`))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      setSelectedIds(new Set());
+      setShowDeleteConfirm(false);
+    },
+  });
+
+  const bulkMergeMutation = useMutation({
+    mutationFn: () =>
+      Promise.all(
+        [...selectedIds]
+          .filter((id) => id !== mergeTargetId)
+          .map((id) => api.post(`/incidents/${mergeTargetId}/merge`, { source_id: id })),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      setSelectedIds(new Set());
+      setShowMergeDialog(false);
+      setMergeTargetId("");
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["incidents", search, severityFilter],
@@ -126,6 +171,27 @@ export function IncidentListPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div className="mb-4 flex items-center gap-3 rounded-md border border-accent/30 bg-accent/5 px-4 py-2">
+              <span className="text-sm font-medium">{selectedIds.size} selected</span>
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete
+              </Button>
+              {selectedIds.size >= 2 && (
+                <Button variant="outline" size="sm" onClick={() => setShowMergeDialog(true)}>
+                  <GitMerge className="h-3.5 w-3.5 mr-1" />
+                  Merge
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <LoadingSpinner />
           ) : rows.length === 0 ? (
@@ -149,6 +215,14 @@ export function IncidentListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={rows.length > 0 && rows.every(({ incident }) => selectedIds.has(incident.id))}
+                      onChange={() => toggleSelectAll(rows.map(({ incident }) => incident.id))}
+                      className="rounded border-border"
+                    />
+                  </TableHead>
                   <TableHead>Severity</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Category</TableHead>
@@ -160,6 +234,14 @@ export function IncidentListPage() {
               <TableBody>
                 {rows.map(({ incident: inc, highlights }) => (
                   <TableRow key={inc.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(inc.id)}
+                        onChange={() => toggleSelect(inc.id)}
+                        className="rounded border-border"
+                      />
+                    </TableCell>
                     <TableCell><SeverityBadge severity={inc.severity} /></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
@@ -204,6 +286,72 @@ export function IncidentListPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+        <DialogHeader>
+          <DialogTitle>Delete Incidents</DialogTitle>
+        </DialogHeader>
+        <DialogContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <strong>{selectedIds.size}</strong> incident{selectedIds.size !== 1 ? "s" : ""}? This action cannot be undone.
+          </p>
+          {bulkDeleteMutation.isError && (
+            <p className="text-sm text-destructive">
+              {bulkDeleteMutation.error instanceof Error ? bulkDeleteMutation.error.message : "Delete failed"}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => bulkDeleteMutation.mutate()}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk merge dialog */}
+      <Dialog open={showMergeDialog} onClose={() => { setShowMergeDialog(false); setMergeTargetId(""); }}>
+        <DialogHeader>
+          <DialogTitle>Merge Incidents</DialogTitle>
+        </DialogHeader>
+        <DialogContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Select the target incident. All other selected incidents will be merged into it.
+          </p>
+          <Select
+            value={mergeTargetId}
+            onChange={(e) => setMergeTargetId(e.target.value)}
+          >
+            <option value="">Select target incident...</option>
+            {rows
+              .filter(({ incident }) => selectedIds.has(incident.id))
+              .map(({ incident }) => (
+                <option key={incident.id} value={incident.id}>
+                  [{incident.severity}] {incident.title}
+                </option>
+              ))}
+          </Select>
+          {bulkMergeMutation.isError && (
+            <p className="text-sm text-destructive">
+              {bulkMergeMutation.error instanceof Error ? bulkMergeMutation.error.message : "Merge failed"}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setShowMergeDialog(false); setMergeTargetId(""); }}>Cancel</Button>
+            <Button
+              onClick={() => bulkMergeMutation.mutate()}
+              disabled={bulkMergeMutation.isPending || !mergeTargetId}
+            >
+              {bulkMergeMutation.isPending ? "Merging..." : "Merge"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

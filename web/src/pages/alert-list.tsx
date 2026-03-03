@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { useTitle } from "@/hooks/use-title";
@@ -14,12 +14,45 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/utils";
 import type { AlertsResponse } from "@/types/api";
-import { Download } from "lucide-react";
+import { Download, CheckCircle, Eye, X } from "lucide-react";
 
 export function AlertListPage() {
   useTitle("Alerts");
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids: string[]) => {
+    setSelectedIds((prev) => {
+      if (ids.every((id) => prev.has(id))) return new Set();
+      return new Set(ids);
+    });
+  };
+
+  const bulkAcknowledgeMutation = useMutation({
+    mutationFn: () => Promise.all([...selectedIds].map((id) => api.patch(`/alerts/${id}/acknowledge`))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      setSelectedIds(new Set());
+    },
+  });
+
+  const bulkResolveMutation = useMutation({
+    mutationFn: () => Promise.all([...selectedIds].map((id) => api.patch(`/alerts/${id}/resolve`))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      setSelectedIds(new Set());
+    },
+  });
 
   const params = new URLSearchParams();
   if (statusFilter) params.set("status", statusFilter);
@@ -79,6 +112,35 @@ export function AlertListPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div className="mb-4 flex items-center gap-3 rounded-md border border-accent/30 bg-accent/5 px-4 py-2">
+              <span className="text-sm font-medium">{selectedIds.size} selected</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => bulkAcknowledgeMutation.mutate()}
+                disabled={bulkAcknowledgeMutation.isPending}
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                {bulkAcknowledgeMutation.isPending ? "Acknowledging..." : "Acknowledge"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => bulkResolveMutation.mutate()}
+                disabled={bulkResolveMutation.isPending}
+              >
+                <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                {bulkResolveMutation.isPending ? "Resolving..." : "Resolve"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <LoadingSpinner />
           ) : alerts.length === 0 ? (
@@ -97,6 +159,14 @@ export function AlertListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id))}
+                      onChange={() => toggleSelectAll(alerts.map((a) => a.id))}
+                      className="rounded border-border"
+                    />
+                  </TableHead>
                   <TableHead>Severity</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
@@ -108,6 +178,14 @@ export function AlertListPage() {
               <TableBody>
                 {alerts.map((alert) => (
                   <TableRow key={alert.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(alert.id)}
+                        onChange={() => toggleSelect(alert.id)}
+                        className="rounded border-border"
+                      />
+                    </TableCell>
                     <TableCell><SeverityBadge severity={alert.severity} /></TableCell>
                     <TableCell>
                       <Link to="/alerts/$alertId" params={{ alertId: alert.id }} className="font-mono text-sm hover:text-accent transition-colors">
