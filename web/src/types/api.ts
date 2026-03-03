@@ -61,6 +61,7 @@ export interface Alert {
   matched_incident_id?: string;
   suggested_solution?: string;
   runbook_url?: string;
+  alert_group_id?: string;
   first_fired_at: string;
   last_fired_at: string;
   created_at: string;
@@ -495,4 +496,50 @@ export interface UserPreferences {
   dashboard?: {
     default_time_range?: string;
   };
+}
+
+// --- Alert Grouping ---
+
+export interface AlertGroupMatcher {
+  key: string;
+  op: string; // =, !=, =~, !~
+  value: string;
+}
+
+export interface AlertGroupingRule {
+  id: string;
+  name: string;
+  description?: string;
+  position: number;
+  is_enabled: boolean;
+  matchers: AlertGroupMatcher[];
+  group_by: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertGroupingRulesResponse {
+  rules: AlertGroupingRule[];
+  count: number;
+}
+
+export interface AlertGroup {
+  id: string;
+  rule_id: string;
+  rule_name: string;
+  group_key_hash: string;
+  group_key_labels: Record<string, string>;
+  status: string;
+  title: string;
+  alert_count: number;
+  max_severity: string;
+  first_alert_at: string;
+  last_alert_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertGroupsResponse {
+  groups: AlertGroup[];
+  count: number;
 }

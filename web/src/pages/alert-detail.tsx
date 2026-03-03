@@ -100,6 +100,14 @@ export function AlertDetailPage() {
               <div><span className="text-muted-foreground">Last fired:</span> {formatRelativeTime(alert.last_fired_at)}</div>
             </div>
             {alert.fingerprint && <div><span className="text-muted-foreground">Fingerprint:</span> <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{alert.fingerprint}</code></div>}
+            {alert.alert_group_id && (
+              <div>
+                <span className="text-muted-foreground">Group:</span>{" "}
+                <Link to="/alerts/groups/$groupId" params={{ groupId: alert.alert_group_id }} className="text-accent hover:underline">
+                  View Group
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
 

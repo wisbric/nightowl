@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Bell,
   BookOpen,
+  Layers,
   FileText,
   Users,
   ArrowUpCircle,
@@ -27,6 +28,7 @@ import { useAuth } from "@/contexts/auth-context";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/alerts", label: "Alerts", icon: Bell },
+  { to: "/alerts/groups", label: "Groups", icon: Layers },
   { to: "/incidents", label: "Incidents", icon: BookOpen },
   { to: "/runbooks", label: "Runbooks", icon: FileText },
   { to: "/rosters", label: "Rosters", icon: Users },

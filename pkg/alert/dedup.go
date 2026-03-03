@@ -102,7 +102,7 @@ func (d *Deduplicator) IncrementAndReturn(ctx context.Context, dbtx db.DBTX, ale
 
 	d.counter.Inc()
 
-	return alertRowToResponse(row), nil
+	return AlertRowToResponse(row), nil
 }
 
 // cacheSet stores a fingerprint → alertID mapping in Redis with TTL.

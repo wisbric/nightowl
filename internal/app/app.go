@@ -27,6 +27,7 @@ import (
 	"github.com/wisbric/nightowl/internal/seed"
 	nightowlmetrics "github.com/wisbric/nightowl/internal/telemetry"
 	"github.com/wisbric/nightowl/pkg/alert"
+	"github.com/wisbric/nightowl/pkg/alertgroup"
 	"github.com/wisbric/nightowl/pkg/apikey"
 	"github.com/wisbric/nightowl/pkg/bookowl"
 	"github.com/wisbric/nightowl/pkg/escalation"
@@ -236,7 +237,8 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 		AgentResolvedTotal: nightowlmetrics.AlertsAgentResolvedTotal,
 	}
 	cfgSvc := tenantconfig.NewService(db, logger)
-	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics, cfgSvc)
+	grouper := alertgroup.NewEvaluator(logger)
+	webhookHandler := alert.NewWebhookHandler(logger, auditWriter, dedup, enricher, webhookMetrics, cfgSvc, grouper)
 	srv.APIRouter.Mount("/webhooks", webhookHandler.Routes())
 
 	rosterHandler := roster.NewHandler(logger, auditWriter)
@@ -244,6 +246,9 @@ func runAPI(ctx context.Context, cfg *config.Config, logger *slog.Logger, db *pg
 
 	escalationHandler := escalation.NewHandler(logger, auditWriter)
 	srv.APIRouter.Mount("/escalation-policies", escalationHandler.Routes())
+
+	alertGroupHandler := alertgroup.NewHandler(logger, auditWriter)
+	srv.APIRouter.Mount("/alert-groups", alertGroupHandler.Routes())
 
 	twilioHandler := integration.NewTwilioHandler(logger)
 	srv.APIRouter.Mount("/twilio", twilioHandler.Routes())

@@ -47,11 +47,11 @@ func (s *Store) Create(ctx context.Context, a NormalizedAlert) (Response, error)
 		return Response{}, fmt.Errorf("creating alert: %w", err)
 	}
 
-	return alertRowToResponse(row), nil
+	return AlertRowToResponse(row), nil
 }
 
-// alertRowToResponse converts a db.Alert row to a Response.
-func alertRowToResponse(row db.Alert) Response {
+// AlertRowToResponse converts a db.Alert row to a Response.
+func AlertRowToResponse(row db.Alert) Response {
 	return Response{
 		ID:                row.ID,
 		Fingerprint:       row.Fingerprint,
@@ -64,6 +64,7 @@ func alertRowToResponse(row db.Alert) Response {
 		Annotations:       row.Annotations,
 		MatchedIncidentID: pgtypeUUIDToPtr(row.MatchedIncidentID),
 		SuggestedSolution: row.SuggestedSolution,
+		AlertGroupID:      pgtypeUUIDToPtr(row.AlertGroupID),
 		OccurrenceCount:   row.OccurrenceCount,
 		FirstFiredAt:      row.FirstFiredAt,
 		LastFiredAt:       row.LastFiredAt,

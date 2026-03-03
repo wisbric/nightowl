@@ -79,6 +79,18 @@ type WebhookMetrics struct {
 	AgentResolvedTotal prometheus.Counter
 }
 
+// AlertGrouper evaluates an alert against grouping rules.
+type AlertGrouper interface {
+	Evaluate(ctx context.Context, dbtx db.DBTX, alertID uuid.UUID, severity string, labels json.RawMessage) AlertGroupResult
+}
+
+// AlertGroupResult is the result of grouping evaluation.
+type AlertGroupResult struct {
+	Matched bool
+	GroupID uuid.UUID
+	RuleID  uuid.UUID
+}
+
 // WebhookHandler provides HTTP handlers for alert webhook endpoints.
 type WebhookHandler struct {
 	logger  *slog.Logger
@@ -87,6 +99,7 @@ type WebhookHandler struct {
 	enrich  *Enricher
 	metrics *WebhookMetrics
 	cfgSvc  BookOwlConfigResolver
+	grouper AlertGrouper
 }
 
 // BookOwlConfigResolver resolves BookOwl API credentials for a tenant.
@@ -95,8 +108,8 @@ type BookOwlConfigResolver interface {
 }
 
 // NewWebhookHandler creates a WebhookHandler.
-func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher, metrics *WebhookMetrics, cfgSvc BookOwlConfigResolver) *WebhookHandler {
-	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich, metrics: metrics, cfgSvc: cfgSvc}
+func NewWebhookHandler(logger *slog.Logger, audit *audit.Writer, dedup *Deduplicator, enrich *Enricher, metrics *WebhookMetrics, cfgSvc BookOwlConfigResolver, grouper AlertGrouper) *WebhookHandler {
+	return &WebhookHandler{logger: logger, audit: audit, dedup: dedup, enrich: enrich, metrics: metrics, cfgSvc: cfgSvc, grouper: grouper}
 }
 
 // Routes returns a chi.Router with webhook routes mounted.
@@ -170,6 +183,14 @@ func (h *WebhookHandler) createOrDedup(r *http.Request, store *Store, normalized
 
 	if h.dedup != nil {
 		h.dedup.RecordNew(ctx, schema, normalized.Fingerprint, resp.ID)
+	}
+
+	// Evaluate grouping rules for new firing alerts.
+	if h.grouper != nil && normalized.Status == "firing" {
+		result := h.grouper.Evaluate(ctx, conn, resp.ID, normalized.Severity, normalized.Labels)
+		if result.Matched {
+			resp.AlertGroupID = &result.GroupID
+		}
 	}
 
 	// Enrich new alerts with knowledge base matches.
@@ -252,7 +273,7 @@ func (h *WebhookHandler) handleAlertmanager(w http.ResponseWriter, r *http.Reque
 				h.logger.Warn("auto-resolve by fingerprint failed", "error", err, "fingerprint", normalized.Fingerprint)
 				continue
 			}
-			resp := alertRowToResponse(row)
+			resp := AlertRowToResponse(row)
 			results = append(results, resp)
 
 			if h.audit != nil {
@@ -362,7 +383,7 @@ func (h *WebhookHandler) handleGeneric(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.logger.Error("resolving alert by agent", "error", err, "id", resp.ID)
 		} else {
-			resp = alertRowToResponse(row)
+			resp = AlertRowToResponse(row)
 		}
 
 		// Auto-create KB entry with the agent's action as the solution.

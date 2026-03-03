@@ -87,7 +87,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpserver.Respond(w, http.StatusOK, alertRowToResponse(row))
+	httpserver.Respond(w, http.StatusOK, AlertRowToResponse(row))
 }
 
 // handleAcknowledge sets an alert to acknowledged status.
@@ -127,7 +127,7 @@ func (h *Handler) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 		h.audit.LogFromRequest(r, "acknowledge", "alert", row.ID, detail)
 	}
 
-	httpserver.Respond(w, http.StatusOK, alertRowToResponse(row))
+	httpserver.Respond(w, http.StatusOK, AlertRowToResponse(row))
 }
 
 // handleResolve sets an alert to resolved status.
@@ -167,7 +167,7 @@ func (h *Handler) handleResolve(w http.ResponseWriter, r *http.Request) {
 		h.audit.LogFromRequest(r, "resolve", "alert", row.ID, detail)
 	}
 
-	httpserver.Respond(w, http.StatusOK, alertRowToResponse(row))
+	httpserver.Respond(w, http.StatusOK, AlertRowToResponse(row))
 }
 
 // --- Filtered list ---
@@ -177,6 +177,7 @@ type alertFilters struct {
 	Status   string
 	Severity string
 	Source   string
+	GroupID  string
 	After    *time.Time
 	Before   *time.Time
 	Limit    int
@@ -188,6 +189,7 @@ func parseAlertFilters(r *http.Request) alertFilters {
 		Status:   r.URL.Query().Get("status"),
 		Severity: r.URL.Query().Get("severity"),
 		Source:   r.URL.Query().Get("source"),
+		GroupID:  r.URL.Query().Get("group_id"),
 		Limit:    50,
 		Offset:   0,
 	}
@@ -234,6 +236,11 @@ func listAlertsFiltered(ctx context.Context, dbtx db.DBTX, f alertFilters) ([]Re
 		args = append(args, f.Source)
 		argIdx++
 	}
+	if f.GroupID != "" {
+		conditions = append(conditions, fmt.Sprintf("alert_group_id = $%d", argIdx))
+		args = append(args, f.GroupID)
+		argIdx++
+	}
 	if f.After != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIdx))
 		args = append(args, *f.After)
@@ -251,6 +258,7 @@ func listAlertsFiltered(ctx context.Context, dbtx db.DBTX, f alertFilters) ([]Re
 		resolved_by_agent, agent_resolution_notes,
 		occurrence_count, first_fired_at, last_fired_at,
 		escalation_policy_id, current_escalation_tier,
+		alert_group_id,
 		created_at, updated_at
 	FROM alerts`
 
@@ -278,11 +286,12 @@ func listAlertsFiltered(ctx context.Context, dbtx db.DBTX, f alertFilters) ([]Re
 			&a.ResolvedByAgent, &a.AgentResolutionNotes,
 			&a.OccurrenceCount, &a.FirstFiredAt, &a.LastFiredAt,
 			&a.EscalationPolicyID, &a.CurrentEscalationTier,
+			&a.AlertGroupID,
 			&a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning alert row: %w", err)
 		}
-		results = append(results, alertRowToResponse(a))
+		results = append(results, AlertRowToResponse(a))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating alert rows: %w", err)

@@ -41,7 +41,7 @@ func TestPgtypeUUIDToPtr_Invalid(t *testing.T) {
 }
 
 func TestAlertRowToResponse_EnrichmentFields(t *testing.T) {
-	// Test that alertRowToResponse includes enrichment fields.
+	// Test that AlertRowToResponse includes enrichment fields.
 	incidentID := uuid.New()
 	solution := "Restart the pod"
 

@@ -14,6 +14,9 @@ import { RosterListPage } from "@/pages/roster-list";
 import { RosterDetailPage } from "@/pages/roster-detail";
 import { EscalationListPage } from "@/pages/escalation-list";
 import { EscalationDetailPage } from "@/pages/escalation-detail";
+import { AlertGroupListPage } from "@/pages/alert-group-list";
+import { AlertGroupDetailPage } from "@/pages/alert-group-detail";
+import { AlertGroupRulesPage } from "@/pages/alert-group-rules";
 import { AdminPage } from "@/pages/admin";
 import { AdminUsersPage } from "@/pages/admin-users";
 import { AdminApiKeysPage } from "@/pages/admin-api-keys";
@@ -81,6 +84,9 @@ const authCallbackRoute = createRoute({
 const indexRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/", component: DashboardPage });
 const alertsRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/alerts", component: AlertListPage });
 const alertDetailRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/alerts/$alertId", component: AlertDetailPage });
+const alertGroupsRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/alerts/groups", component: AlertGroupListPage });
+const alertGroupDetailRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/alerts/groups/$groupId", component: AlertGroupDetailPage });
+const alertGroupRulesRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/alerts/groups/rules", component: AlertGroupRulesPage });
 const incidentsRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/incidents", component: IncidentListPage });
 const incidentDetailRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/incidents/$incidentId", component: IncidentDetailPage });
 const rostersRoute = createRoute({ getParentRoute: () => appLayoutRoute, path: "/rosters", component: RosterListPage });
@@ -109,6 +115,9 @@ const routeTree = publicRootRoute.addChildren([
   appLayoutRoute.addChildren([
     indexRoute,
     alertsRoute,
+    alertGroupRulesRoute,
+    alertGroupDetailRoute,
+    alertGroupsRoute,
     alertDetailRoute,
     incidentsRoute,
     incidentDetailRoute,

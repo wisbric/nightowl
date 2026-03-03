@@ -6,6 +6,7 @@ sql:
       - "sqlc/queries/users/"
       - "sqlc/queries/services/"
       - "sqlc/queries/alerts/"
+      - "sqlc/queries/alertgroup/"
       - "sqlc/queries/incidents/"
       - "sqlc/queries/rosters/"
       - "sqlc/queries/escalation/"

@@ -171,6 +171,7 @@ export function AlertListPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Source</TableHead>
+                  <TableHead>Group</TableHead>
                   <TableHead>Service</TableHead>
                   <TableHead>Fired</TableHead>
                 </TableRow>
@@ -194,6 +195,15 @@ export function AlertListPage() {
                     </TableCell>
                     <TableCell><StatusBadge status={alert.status} /></TableCell>
                     <TableCell className="text-muted-foreground text-sm">{alert.source}</TableCell>
+                    <TableCell>
+                      {alert.alert_group_id ? (
+                        <Link to="/alerts/groups/$groupId" params={{ groupId: alert.alert_group_id }} className="text-xs text-accent hover:underline">
+                          Grouped
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{alert.labels?.service ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatRelativeTime(alert.first_fired_at)}</TableCell>
                   </TableRow>
