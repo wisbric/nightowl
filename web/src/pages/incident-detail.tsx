@@ -161,9 +161,11 @@ export function IncidentDetailPage() {
         ? api.post<Incident>("/incidents", body)
         : api.put<Incident>(`/incidents/${incidentId}`, body);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      if (!isNew) {
+      if (isNew) {
+        navigate({ to: "/incidents/$incidentId", params: { incidentId: result.id } });
+      } else {
         queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
         setEditing(false);
       }
